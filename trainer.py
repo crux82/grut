@@ -14,12 +14,16 @@ import csv
 from typing import List
 import xlsxwriter
 from datetime import datetime
+from utils.compute_postprocessing_grounding import compute_postprocessing_grounding
 
 from utils.confusion_matrix_merger import readSingleMatricesAndUnifiedMatrix
 from utils.enums import Language, SRL_Output
 from utils.errorAnalyser import ErrorAnalyzer
+from utils.evaluate_from_file import compute_truth_and_evaluate_from_file
 from utils.parsing_utils import computeLUDescriptionsIfDontExist, getMaxLength, isPredictionCorrect
 from utils.results_merger import readResultsAndMerge
+
+import spacy
 
 class Trainer:
     def __init__(self, lan: Language, model = 'bart', model_variant = 'base', task = "SRL", learning_rate = 1e-4, batch_size = 4, output_dir = 'outputs', best_model_dir = 'outputs/best_model', n_gpu = 0, num_train_epochs = 10, warmup_ratio = 0.1, patience = 3, use_cuda = False, target_type = "frame", early_stopping = True, num_beans=None, return_sequences=1):
@@ -28,6 +32,10 @@ class Trainer:
         self.model_variant = model_variant
         self.model_name = ""
         self.task = task
+
+        # initialize spacy here
+        self.spacy_model = 'en_core_web_sm' if (self.lan.value == 'en' or self.lan.value == 'english') else 'it_core_news_sm'
+        self.nlp = spacy.load(self.spacy_model)
 
         if model == "mt5" or model == "t5":
             self.model_args = T5Args()
@@ -91,15 +99,19 @@ class Trainer:
         print("**********************************")
 
 
-    def train_saving_all_folds_models(self, num_folds, quick_train = False, addMap = False, map_type = "no", addLUType = False, grounding="no"):
+    def train_saving_all_folds_models(self, num_folds, quick_train = False, addMap = False, map_type = "no", addLUType = False, grounding="no", entityRetrievalType = "STR", lexicalReferences = "all", thresholdW2V = 0.5, thresholdLDIST = 0.8):
         evaluator = Evaluator(self.target_type)
         now = datetime.now() # current date and time
         date_time = now.strftime("%Y_%m_%d_%H_%M_%S")
         model_folder_name = 'model'
-
-        kfold_folder_name = self.model + '_' + self.lan.value + "_" + map_type + "_" + grounding + "grounding"
+        
+        # for dataset filename
         if addLUType:
-            kfold_folder_name += "_addedLUType"
+            lutype = "_addedLUType"
+        else:
+            lutype = ""
+
+        kfold_folder_name = self.model + '_' + self.lan.value + "_" + map_type + "_" + grounding + "grounding_" + entityRetrievalType + "_" + lexicalReferences + "LexicalReferences" + lutype
         kfold_folder_name += "_" + date_time
         kfold_base_dir = model_folder_name + '/' + kfold_folder_name + '/'
         hp = HuricParser(self.lan)
@@ -162,21 +174,15 @@ class Trainer:
                 except OSError as exc: # Guard against race condition
                     if exc.errno != errno.EEXIST:
                         raise
-            
-            # for filename
-            if addLUType:
-                lutype = "_addedLUType"
-            else:
-                lutype = ""
 
-            filename_to_load = "./data/huric_dataset/" + self.lan.value + "_" + map_type + "_" + grounding + "grounding" + lutype + ".csv"
+            filename_to_load = "./data/huric_dataset/" + self.lan.value + "_" + map_type + "_" + grounding + "grounding_" + entityRetrievalType + "_" + lexicalReferences + "LexicalReferences" + lutype + ".csv"
             if not os.path.exists("./data/huric_dataset/"):
                 try:
                     os.makedirs("./data/huric_dataset/")
                 except OSError as exc: # Guard against race condition
                     if exc.errno != errno.EEXIST:
                         raise
-            hp.parseAndWrite("./data/huric/", self.task, filename_to_load, self.target_type, addMap, map_type, addLUType, grounding)
+            hp.parseAndWrite("./data/huric/", self.task, filename_to_load, self.target_type, addMap, map_type, addLUType, grounding, entityRetrievalType, lexicalReferences, thresholdW2V, thresholdLDIST)
             allData = pd.read_csv(filename_to_load)
 
             # if multitask_model:
@@ -197,7 +203,8 @@ class Trainer:
             train_input_text = []
             train_target_text = []
             for id, input_text, target_text in zip(allData['id'].tolist(), allData['input_text'].tolist(), allData['target_text'].tolist()):
-                id_string = str(id).replace("999", "") # if multitask_model else str(id)
+                id_string = str(id)
+                # id_string = str(id).replace("999", "") if multitask_model else str(id)
                 if int(id_string) in train_df_ids:
                     train_input_text.append(input_text)
                     train_target_text.append(target_text)
@@ -211,7 +218,8 @@ class Trainer:
             eval_input_text = []
             eval_target_text = []
             for id, input_text, target_text in zip(allData['id'].tolist(), allData['input_text'].tolist(), allData['target_text'].tolist()):
-                id_string = str(id).replace("999", "") # if multitask_model else str(id)
+                id_string = str(id)
+                # id_string = str(id).replace("999", "") if multitask_model else str(id)
                 if int(id_string) in eval_df_ids:
                     eval_input_text.append(input_text)
                     eval_target_text.append(target_text)
@@ -266,13 +274,24 @@ class Trainer:
             texts = test_df["input_text"].tolist()
             preds = model.predict(texts)
 
-            # for SRL calculate 2 confusion matrix
+            # for SRL calculate 3 confusion matrices
             if self.target_type == "SRL":
                 confusion_matrix_frame, confusion_matrix_frame_elements_span, confusion_matrix_frame_elements_head = evaluator.get_confusion_matrix(texts, preds, truth)
                 confusion_matrix_frame.save_to_file(kfold_dir + '/' + 'frame_' + confusion_matrix_name_file)
                 confusion_matrix_frame_elements_span.save_to_file(kfold_dir + '/' + 'frame_elements_span_' + confusion_matrix_name_file)
                 confusion_matrix_frame_elements_head.save_to_file(kfold_dir + '/' + 'frame_elements_head_' + confusion_matrix_name_file)
 
+                if grounding == "full":
+                    compute_truth_and_evaluate_from_file(path=kfold_dir, grounding_type="full", entityRetrievalType=entityRetrievalType, nlp=self.nlp)
+
+                # print CMs f1
+                print(f"FRAMES F1:\t{confusion_matrix_frame.get_f1()}")
+                print("************************************************************")
+                print(f"FE span F1:\t{confusion_matrix_frame_elements_span.get_f1()}")
+                print("************************************************************")
+                print(f"FE head F1:\t{confusion_matrix_frame_elements_head.get_f1()}")
+                print("************************************************************")
+                
             elif self.target_type == "FP + E2E":
                 fp_cm, e2e_cm, _ = evaluator.get_confusion_matrix(texts, preds, truth)
                 fp_cm.save_to_file(kfold_dir + '/' + 'frame_' + confusion_matrix_name_file)
@@ -311,8 +330,15 @@ class Trainer:
 
         readSingleMatricesAndUnifiedMatrix(destination)
         readResultsAndMerge(destination)
+
+        if grounding == "post":
+            print("INFO: computing post processing grounding!")
+            compute_postprocessing_grounding(destination, entityRetrievalType, self.nlp)
+        
         ea = ErrorAnalyzer(destination)
         ea.analyze()
+
+        
 
     
     def save_predict_result_xlsx_file(self, file, ids: List[str], texts: List[str], predictions: List[str], truths: List[str], frames_lists):
