@@ -4,6 +4,7 @@ import random
 import csv
 import numpy as np
 import spacy
+import random
 
 from utils.enums import Language, SRL_Input, SRL_Output
 from utils.files_utils import getAllFiles
@@ -24,8 +25,8 @@ class HuricParser:
         self.nlp = spacy.load(model)
 
         # compute entities name here
-        # just precompute 3000 random entity names
-        for _ in range(3000):
+        # just precompute 5000 random entity names
+        for _ in range(5000):
             self.entitiesName.append(chars[int(random.randrange(0, len(chars)-1))] + numbers[int(random.randrange(0, len(numbers)-1))])
 
     def getNextEntityName(self):
@@ -87,7 +88,7 @@ class HuricParser:
         # print(f"Sentence {sentence} \t lus {sentence_lus}")
         return sentence_lus
 
-    def parseHuricFile(self, huricFile, task, type: str, addMap: bool, noMap: bool, map_type: str, addLUType: bool, grounding: str):
+    def parseHuricFile(self, huricFile, task, type: str, addMap: bool, noMap: bool, map_type: str, addLUType: bool, grounding: str, entityRetrievalType: str, lexicalReferences: str = "all", thresholdW2V = 0.5, thresholdLDIST = 0.8):
         # parse an xml file by name
         file = minidom.parse(huricFile)
 
@@ -112,7 +113,7 @@ class HuricParser:
         #     sentence_map, atoms = self.parseMap(entities, lexicalGroundings, lexicalizedMap)
         # else:
         #     sentence_map, atoms = self.computeLexicalGroundingsANDparseMap(entities, sentence, lexicalizedMap)
-        sentence_map, atoms = self.computeLexicalGroundingsANDparseMap(entities, sentence, map_type)
+        sentence_map, atoms = self.computeLexicalGroundingsANDparseMap(entities, sentence, map_type, entityRetrievalType, lexicalReferences, thresholdW2V, thresholdLDIST)
         
         output = ""
         output_obj = {}
@@ -146,7 +147,7 @@ class HuricParser:
                 separator = " " + SRL_Input.FEATURE_ELEMENT_SEPARATOR.value + " "
                 sentence += " " + SRL_Input.FEATURE_SEPARATOR.value + " " + separator.join(luDescriptions)
 
-        if addMap and grounding != "no":
+        if addMap and grounding != "no" and sentence_map != "":
             sentence += " " + SRL_Input.FEATURE_SEPARATOR.value + " " + sentence_map
             # sentence += " " + SRL_Input.FEATURE_SEPARATOR.value + " " + sentence_map if sentence_map != "" else " " + SRL_Input.FEATURE_SEPARATOR.value + " NOMAP"
         # elif not addMap:
@@ -298,8 +299,9 @@ class HuricParser:
         return map, atoms
 
 
-    def computeLexicalGroundingsANDparseMap(self, entities, sentence, map_type):
-
+    def computeLexicalGroundingsANDparseMap(self, entities, sentence, map_type, entityRetrievalType, lexicalReferences = "all", thresholdW2V = 0.5, thresholdLDIST = 0.8):
+        print("computeLexicalGroundingsANDparseMap")
+        
         entities_list = []
         atoms = {}
 
@@ -338,11 +340,17 @@ class HuricParser:
 
             # loop through lexical_references and find match in text
             token_ids = []
-            for lex_ref in lexical_references:
-                entity_in_sentence_tokens = entity_in_sentence(lex_ref, sentence)
+            if lexicalReferences == "all":
+                for lex_ref in lexical_references:
+                    entity_in_sentence_tokens = entity_in_sentence(lex_ref, sentence, self.nlp, type=entityRetrievalType, thresholdW2V=thresholdW2V, thresholdLDIST=thresholdLDIST)
+                    if entity_in_sentence_tokens:
+                        token_ids.extend(entity_in_sentence_tokens)
+            elif lexicalReferences == "random":
+                index = random.randrange(0, len(lexical_references))
+                entity_in_sentence_tokens = entity_in_sentence(lexical_references[index], sentence, self.nlp, type=entityRetrievalType, thresholdW2V=thresholdW2V, thresholdLDIST=thresholdLDIST)
                 if entity_in_sentence_tokens:
                     token_ids.extend(entity_in_sentence_tokens)
-                # if token_ids is not []
+                lexical_references = [lexical_references[index]]
 
             if token_ids:
                 # create atom
@@ -361,7 +369,7 @@ class HuricParser:
                 atoms.pop(atom)
 
         map = ""
-        if map_type != "nomap":
+        if map_type.lower() != "nomap":
             entities_name_list = []
             for _, value in atoms.items():
                 
@@ -375,22 +383,22 @@ class HuricParser:
                 
                 if value['name'] != "" and value['type'] != "" and value['objectName'] != "":
                     v = ""
-                    if map_type == "lmd":
+                    if map_type.lower() == "lmd":
                         if self.lan.value == "en":
                             description = " also known as " + " or ".join(value['name']) + " is an instance of class "
                         elif self.lan.value == "it":
                             description = " conosciuto anche come " + " oppure ".join(value['name']) + " è un'istanza della classe "
 
                         v = value['objectName'] + description + value['type']
-                    elif map_type == "smd":
+                    elif map_type.lower() == "smd":
                         v = value['name'][0] + SRL_Input.TYPE_SEPARATOR.value + value['type'] + SRL_Input.CLASS_SEPARATOR.value + value['objectName']
-                    elif map_type == "cmd":
+                    elif map_type.lower() == "cmd":
                         if self.lan.value == "en":
                             v = "there is a " + value['type']
                         elif self.lan.value == "it":
                             v = "c'è un " + value['type']
                     else:
-                        print(f"MAP TYPE '{map_type}' NOT SUPPORTED!")
+                        print(f"MAP TYPE '{map_type.lower()}' NOT SUPPORTED!")
                     map = map + " " + SRL_Input.FEATURE_ELEMENT_SEPARATOR.value + " " + v if map != "" else v
 
             distancesStringForMap = self.getDistancesStringForMap(atoms, map_type)
@@ -487,7 +495,7 @@ class HuricParser:
                     frame_element["values"].sort(key = lambda x: int(x['tokens'][0]))
 
                     object_name = ""
-                    if map_type == "cmd":
+                    if map_type.lower() == "cmd":
                         object_name = frame_element["values"][0]["type"]
                     else:
                         object_name = frame_element["values"][0]["objectName"]
@@ -525,21 +533,21 @@ class HuricParser:
         for key, value in atoms.items():
             if value['contain_ability']:
                 v = ""
-                if map_type == "lmd":
+                if map_type.lower() == "lmd":
                     if self.lan.value == "en":
                         contain_ability_relation = " can contain other objects"
                     elif self.lan.value == "it":
                         contain_ability_relation = " può contenere altri oggetti"
                     
                     v = atoms[key]["objectName"] + contain_ability_relation
-                elif map_type == "smd":
+                elif map_type.lower() == "smd":
                     if self.lan.value == "en":
                         contain_ability_relation = " CONTAIN ABILITY"
                     elif self.lan.value == "it":
                         contain_ability_relation = " ABILITà DI CONTENERE"
 
                     v = atoms[key]["objectName"] + contain_ability_relation
-                elif map_type == "cmd":
+                elif map_type.lower() == "cmd":
                     if self.lan.value == "en":
                         contain_ability_relation = " can contain other objects"
                     elif self.lan.value == "it":
@@ -563,21 +571,21 @@ class HuricParser:
 
                 if distance <= float(1.9) and key2 not in checkedEntities:
                     v = ""
-                    if map_type == "lmd":
+                    if map_type.lower() == "lmd":
                         if self.lan.value == "en":
                             near_relation = " is near "
                         elif self.lan.value == "it":
                             near_relation = " è vicino "
                         
                         v = atoms[key]["objectName"] + near_relation + atoms[key2]["objectName"]
-                    elif map_type == "smd":
+                    elif map_type.lower() == "smd":
                         if self.lan.value == "en":
                             near_relation = " NEAR "
                         elif self.lan.value == "it":
                             near_relation = " VICINO "
 
                         v = atoms[key]["objectName"] + near_relation + atoms[key2]["objectName"]
-                    elif map_type == "cmd":
+                    elif map_type.lower() == "cmd":
                         if self.lan.value == "en":
                             near_relation = " is near "
                         elif self.lan.value == "it":
@@ -657,7 +665,7 @@ class HuricParser:
         
         return dict
 
-    def parse(self, path, task, type: str, addMap: bool, map_type: str, noMapExamples: bool = False, addLUType: bool = False, grounding:str = "no"):
+    def parse(self, path, task, type: str, addMap: bool, map_type: str, noMapExamples: bool = False, addLUType: bool = False, grounding:str = "no", entityRetrievalType: str = "STR", lexicalReferences: str = "all", thresholdW2V = 0.5, thresholdLDIST = 0.8):
 
         files = getAllFiles(path + self.lan.value)
 
@@ -665,7 +673,7 @@ class HuricParser:
         outputs_obj = {}
 
         for file in files:
-            huric_file_parsed, output_obj = self.parseHuricFile(file, task, type, addMap, noMap=False, map_type=map_type, addLUType=addLUType, grounding=grounding)
+            huric_file_parsed, output_obj = self.parseHuricFile(file, task, type, addMap, noMap=False, map_type=map_type, addLUType=addLUType, grounding=grounding, entityRetrievalType=entityRetrievalType, lexicalReferences=lexicalReferences, thresholdW2V=thresholdW2V, thresholdLDIST=thresholdLDIST)
             if output_obj:
                 outputs_obj.update(output_obj)
             files_parsed.append(huric_file_parsed)
@@ -682,11 +690,11 @@ class HuricParser:
         
         return files_parsed, outputs_obj
     
-    def parseAndWrite(self, path, task, toFile, type: str = "frame", addMap: bool = False, map_type: str = "nomap", addLUType: bool = False, grounding: str = "no"):
+    def parseAndWrite(self, path, task, toFile, type: str = "frame", addMap: bool = False, map_type: str = "nomap", addLUType: bool = False, grounding: str = "no", entityRetrievalType = "STR", lexicalReferences: str = "all", thresholdW2V = 0.5, thresholdLDIST = 0.8):
         
         header = ['id', 'input_text', 'target_text']
 
-        files_parsed, outputs_obj = self.parse(path, task, type, addMap, map_type, addLUType=addLUType, grounding=grounding)
+        files_parsed, outputs_obj = self.parse(path, task, type, addMap, map_type, addLUType=addLUType, grounding=grounding, entityRetrievalType = entityRetrievalType, lexicalReferences=lexicalReferences, thresholdW2V=thresholdW2V, thresholdLDIST=thresholdLDIST)
 
         print(f"Writing HURIC DATASET to {toFile}")
         with open(toFile, 'w', encoding='UTF8', newline='') as f:
