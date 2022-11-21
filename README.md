@@ -6,9 +6,9 @@ This repository contains the code for two papers:
 GrUT is a neural approach for the interpretation of robotic spoken commands that is consistent with (i) the world (with all the entities therein), (ii) the robotic platform (with all its inner representations and capabilities), and (iii) the linguistic information derived from the user’s utterance. It is a sequence-to-sequence method that performs Grounded Semantic Role Labeling in an end-to-end manner, thus avoiding the traditional cascade of interpretation tasks to be solved and effectively linking arguments on the basis of the status and properties of the real-world.  
 
 We released here GrUT 2.0, that is an extension of the original work where the model is expected to produce indexed interpretations in the robot Knowledge Base through the identifier of the real existing entities. In particular, the interpretation is consistent both with the command *and* the map of the surrounding environment.  
-In the 1.0 version, all the entities, whose name exactly match at least one word in the command, are retrieved and fed in the input. The Exact Match is not suitable to retrieve objects like *volume* or *sofa* if the command contains *book* or *couch*. In the extended work, we propose 2 additional *LexicalSimilarity* functions to retrieve entities:
-- *Levenshtein Similarity*, based on the Levenshtein Distance
-- *Neural Semantic Similarity*, based on W2V embeddings
+In the 1.0 version, all the entities, whose name exactly match at least one word in the command, are retrieved and fed in the input. The Exact Match is not suitable to retrieve objects like *volume* or *sofa* if the command contains *book* or *couch*. In the extended work, we propose 2 additional *LexicalSimilarity* functions to retrieve entities and improve the retrieval step:
+- *Levenshtein Similarity*, based on the Levenshtein Distance, as a "soft" string matching able to capture morphological reatedness between input word pairs.
+- *Neural Semantic Similarity*, based on W2V embeddings, it corresponds to the cosine similarity between embeddings representing input word pairs. It is capable of semantic similarity as words with the same meaning are close to each other in the W2V space.
 
 This code runs the GrUT experiment over a public dataset ([HuRIC 2.1](https://github.com/crux82/huric)) for the Semantic Role Labeling (SRL) task and compares its performances with a simple ready to use model, namely BART, finetuned on the same dataset.  
 
