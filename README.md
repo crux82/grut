@@ -7,11 +7,12 @@ This code runs the GrUT experiment over a public dataset ([HuRIC 2.1](https://gi
 
 As a result, we show an error reduction of 26% for the Frame Prediction (FP) task and 23% for the Argument Identification and Classification (AIC) task. You can find more details about the tasks in the paper.
 
+
 # Create Environment
 Create a new environment:  
 
     conda create --name venv  
-    
+
 And activate it:  
 
     conda activate venv
@@ -21,7 +22,7 @@ And activate it:
 You can install them from `requirements.txt` file with:  
 
     pip install -r requirements.txt  
-    
+
 Then download spacy:  
 
     python -m spacy download en_core_web_sm  
@@ -36,10 +37,35 @@ Then download spacy:
 - HuRIC 2.1 dataset. You can download it manually and put it in `data` folder or use:  
 
     `git clone https://github.com/crux82/huric.git data`  
-    
+
 - You should use `nohup` or `nodemon` to start your training, as you don't want to wait for it to finish :)  
 
-# How to train!
+
+# How to use GrUT
+**You need to download the model first and put it in a subfolder**, in this example we put it in the `model` subfolder.
+Based on map description you will get a different interpretation. Imagine there's a book on the table and you want the robot to get it to you, you should use:
+
+    python grut.py predict -i "Take the book on the table # b1 also known as book or volume is a BOOK and t1 also known as table is a TABLE # b1 near t1" -m /model/  
+
+you will get in output:  `Taking(Theme('the book'))`   
+If the book is far from the table and you want the robot to move it there, then you should use:
+
+    python grut.py predict -i "Take the book on the table # b1 also known as book or volume is a BOOK and t1 also known as table is a TABLE" -m /model/  
+
+and you will get in output: `Bringing(Theme('the book'), Goal('on the table'))`
+
+
+### options
+
+    -h : help.
+    -m : define path to model.
+    -t : define the task.
+    -i : input to be predicted.
+
+**Notice** that the input needs to be in the form described in the paper, i.e. with existential and spatial map description prepended to the input and divided by `#`.
+
+
+# How to train GrUT
 This repository provides the code to fine tune 2 models: **GrUT**, that takes a command and the environment description in natural language as input to provide the interpretation, and **BART**, that takes only the command as input to provide the interpretation.
 In **bold** you will find the name of the model, as reported in the paper, a brief description and the code to execute the command in order to train it.  
 
@@ -47,40 +73,4 @@ In **bold** you will find the name of the model, as reported in the paper, a bri
 
     `nohup python -u main.py train -mn bart -mv base -t SRL -bs 32 -uc True -ep 50 -nf 10 -tt SRL > logs/testing_verbose_with_prints_bart_base.out &`  
 
-- **GRUT**: BART with existential and spatial map description  
-
-    `nohup python -u main.py train -mn bart -mv base -t SRL -bs 32 -uc True -ep 50 -nf 10 -tt SRL -gr half -map lmd > logs/testing_verbose_with_prints_grut.out &`  
- 
-
-### Options
-Here you can find a list of the options used to train the models.
-
-    -h : help.
-    -am : define whether to add map description or not, default False.
-    -bs : define batch size, 4 by default.
-    -ep : define numbers of epochs for training, 1 by default.
-    -es : define if using early stopping considering epoch during training or not, the default is True.
-    -mn : define model name: bart (default), t5, mt5.
-    -mv : define model size: small, base (default), large, ecc.
-    -nf : define numbers of fold in kfold.
-    -uc : define if use GPU True/False.
-    -t  : define task type: FP(Frame Prediction), BD(Boundary Detection), AC(Argument Classification), SRL (default).
-    -tt : define type of target manipulation: frame, frame+pos, frame+token, frame+sentence, SRL(default).
-    
-
-# Results
-Results will be written inside `./model/<model_name>` folder.   
-For example: if you want to train **GrUT**, <model_name> will be `bart_en_stm_lmd_halfgrounding_W2V_allLexicalReferences_<TIMESTAMP>` based on the options described here. There you will find, among others, 3 files:  
-- `results_unified.xlsx` containing test set sentences, with predictions and gold standard (truth)  
-- `frames_CM_unified.txt` containing confusion matrix for frames only (Frame Prediction task), merged for all X folds  
-- `frame_elements_CM_unified.txt` containing confusion matrix for frame elements (arguments and types for AIC task), merged for all X folds  
-
-
-# How to start predict mode
-    python main.py predict
-### options
-    -h : help.
-    -m : define path to model.
-    -t : define the task.
-    -i : input to be predicted.
-**Notice** that the input needs to be in the form described in the paper, i.e. with existential and spatial map description prepended to the input and divided by `#`.
+- **GRUT**: BART with existential and spatial map description
