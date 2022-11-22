@@ -61,6 +61,7 @@ Given a command like "*take the book to the bedroom*", with GrUT v1.0 you should
 and you will get in output: `BRINGING(Theme('the book'), Goal('to the bedroom'))`  
 
 If you want a fully grounded logical form, you can use the GrUT v2.0 with the following command:
+
     python grut.py predict -i "take the book to the bedroom # b1 also known as book or textbook is an instance of class BOOK & b5 also known as bedroom or bed room is an instance of class BEDROOM" -m model/grut_v2
 
 and you will get: `Bringing(Theme(b1), Goal(b5))`, where the names of the entities can change because they are generated dinamically. Anyhow, the system logs the map description, so you can check if they match.  
