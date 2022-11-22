@@ -1,12 +1,15 @@
 # Introduction
 This repository contains the code for two papers:
-- **GrUT 1.0 (Grounded language Understanding via Transformers): Embedding Contextual Information in seq2seq models for Grounded Semantic Role Labeling** published in the **AIxIA 2022** conference by *Claudiu Daniel Hromei* (Tor Vergata, University of Rome; Università Campus Bio-Medico di Roma), *Lorenzo Cristofori* (Tor Vergata, University of Rome), *Danilo Croce* (Tor Vergata, University of Rome) and *Roberto Basili* (Tor Vergata, University of Rome). The paper can be found [here]().  
-- **GrUT 2.0 (Grounded language Understanding via Transformers): Grounding end-to-end Architectures for Semantic Role Labeling in Human Robot Interaction** published in the **NL4AI** workshop at AIxIA 2022 conference by *Claudiu Daniel Hromei* (Tor Vergata, University of Rome; Università Campus Bio-Medico di Roma), *Danilo Croce* (Tor Vergata, University of Rome) and *Roberto Basili* (Tor Vergata, University of Rome). The paper can be found [here]().  
+- **GrUT v1.0 (Grounded language Understanding via Transformers): Embedding Contextual Information in seq2seq models for Grounded Semantic Role Labeling** published in the **AIxIA 2022** conference by *Claudiu Daniel Hromei* (Tor Vergata, University of Rome; Università Campus Bio-Medico di Roma), *Lorenzo Cristofori* (Tor Vergata, University of Rome), *Danilo Croce* (Tor Vergata, University of Rome) and *Roberto Basili* (Tor Vergata, University of Rome). The paper can be found [here]().  
+- **GrUT v2.0 (Grounded language Understanding via Transformers): Grounding end-to-end Architectures for Semantic Role Labeling in Human Robot Interaction** published in the **NL4AI** workshop at AIxIA 2022 conference by *Claudiu Daniel Hromei* (Tor Vergata, University of Rome; Università Campus Bio-Medico di Roma), *Danilo Croce* (Tor Vergata, University of Rome) and *Roberto Basili* (Tor Vergata, University of Rome). The paper can be found [here]().  
 
 GrUT is a neural approach for the interpretation of robotic spoken commands that is consistent with (i) the world (with all the entities therein), (ii) the robotic platform (with all its inner representations and capabilities), and (iii) the linguistic information derived from the user’s utterance. It is a sequence-to-sequence method that performs Grounded Semantic Role Labeling in an end-to-end manner, thus avoiding the traditional cascade of interpretation tasks to be solved and effectively linking arguments on the basis of the status and properties of the real-world.  
 
-We released here GrUT 2.0, that is an extension of the original work where the model is expected to produce indexed interpretations in the robot Knowledge Base through the identifier of the real existing entities. In particular, the interpretation is consistent both with the command *and* the map of the surrounding environment.  
-In the 1.0 version, all the entities, whose name exactly match at least one word in the command, are retrieved and fed in the input. The Exact Match is not suitable to retrieve objects like *volume* or *sofa* if the command contains *book* or *couch*. In the extended work, we propose 2 additional *LexicalSimilarity* functions to retrieve entities and improve the retrieval step:
+Given a command, "*take the book to the bedroom*", GrUT v1.0 will output a pure linguistic interpretation based on the [Frame Semantics](https://framenet.icsi.berkeley.edu/fndrupal/) theory, i.e.`BRINGING(Theme('the book'), Goal('to the bedroom'))`, which means to take *the book* wherever it is and *bring* it *to the bedroom*. Here *the book* and *the bedroom* are real existing entities in the robot environment, each of which described by an identifier (ID), its position (x,y,z), a list of lexical references (labels like *book*, *volume*, *bedroom*, etc.). The interpretation is consistent both with the command *and* the map of the surrounding environment.  
+
+We released here GrUT v2.0, that is an extension of the original work where the model is expected to produce indexed interpretations in the robot Knowledge Base through the identifier of the real existing entities, rather than rewriting the span of text. Given the same command as before, "*take the book to the bedroom*", GrUT v2.0 will output a fully grounded interpretation, i.e. `Bringing(Theme(b1), Goal(b5))`, where *b1* is the identifier of the BOOK entity and *b5* is the identifier of the BEDROOM entity.
+
+Moreover, in the 1.0 version, all the entities, whose name exactly match at least one word in the command, are retrieved and fed in the input, so that the model can use its attention mechanism to make reference to the entities. The Exact Match is not suitable to retrieve objects like *volume* or *sofa* if the command contains *book* or *couch*, respectively. In the extended work, we propose 2 additional *LexicalSimilarity* functions to retrieve entities and improve the retrieval step:
 - *Levenshtein Similarity*, based on the Levenshtein Distance, as a "soft" string matching able to capture morphological reatedness between input word pairs.
 - *Neural Semantic Similarity*, based on W2V embeddings, it corresponds to the cosine similarity between embeddings representing input word pairs. It is capable of semantic similarity as words with the same meaning are close to each other in the W2V space.
 
@@ -49,22 +52,24 @@ Then download spacy:
 
 
 # How to use GrUT
-**You need to download the model first and put it in a subfolder**, in this example we put it in the `model` subfolder. Depending on the model selected, you can use GrUT 1.0 or GrUT 2.0 and it will generate pure linguistic (1.0) or grounded (2.0) interpretations.  
-Based on map description you will get a different interpretation. Imagine there's a book on the table and you want the robot to get it to you, you should use:
+**You need to download the model first and put it in a subfolder**, in this example we put GrUT v1.0 in `model/grut_v1` and GrUT v2.0 in `model/grut_v2`. Depending on the model selected, you can use GrUT 1.0 or GrUT 2.0 and it will generate pure linguistic (1.0) or grounded (2.0) interpretations.  
 
-    python grut.py predict -i "Take the book on the table # b1 also known as book or volume is an instance of class BOOK and t1 also known as table is an instance of class TABLE # b1 near t1" -m /model/  
+Given a command like "*take the book to the bedroom*", with GrUT v1.0 you should use:
 
-you will get in output:  
-- `Taking(Theme('the book'))` for 1.0
-- `Taking(Theme(b1))` for 2.0
+    python grut.py predict -i "take the book to the bedroom # b1 also known as book or textbook is an instance of class BOOK & b5 also known as bedroom or bed room is an instance of class BEDROOM" -m model/grut_v1  
 
-If the book is far from the table and you want the robot to move it there, then you should use:
+and you will get in output: `BRINGING(Theme('the book'), Goal('to the bedroom'))`  
 
-    python grut.py predict -i "Take the book on the table # b1 also known as book or volume is an instance of class BOOK and t1 also known as table is an instance of class TABLE" -m /model/  
+If you want a fully grounded logical form, you can use the GrUT v2.0 with the following command:
+    python grut.py predict -i "take the book to the bedroom # b1 also known as book or textbook is an instance of class BOOK & b5 also known as bedroom or bed room is an instance of class BEDROOM" -m model/grut_v2
 
-and you will get in output: 
-- `Bringing(Theme('the book'), Goal('on the table'))` for 1.0
-- `Bringing(Theme(b1), Goal(t1))` for 2.0
+and you will get: `Bringing(Theme(b1), Goal(b5))`, where the names of the entities can change because they are generated dinamically. Anyhow, the system logs the map description, so you can check if they match.  
+
+**Notice** that here the map is explictly concatenated to the input, but if you want the model to parse a file for you, just add the path with the `-hrc` option:  
+
+    python grut.py predict -i "take the book to the bedroom" -hrc data/huric/en/S4R/2748.hrc -m model/grut_v1 
+
+You should get the same output as before.
 
 
 ### Options
@@ -84,11 +89,11 @@ In **bold** you will find the name of the model, as reported in the paper, a bri
 
 - **BART_base**: BART base, as released by huggingface  
 
-    `nohup python -u main.py train -mn bart -mv base -t SRL -bs 32 -uc True -ep 50 -nf 10 -tt SRL > logs/testing_verbose_with_prints_bart_base.out &`  
+    `nohup python -u grut.py train -mn bart -mv base -t SRL -bs 32 -uc True -ep 50 -nf 10 -tt SRL > logs/testing_verbose_with_prints_bart_base.out &`  
 
 - **GRUT**: BART with existential and spatial map description
 
-    `nohup python -u main.py train -mn bart -mv base -t SRL -bs 32 -uc True -ep 50 -nf 10 -tt SRL -gr half -map lmd > logs/testing_verbose_with_prints_grut.out &`  
+    `nohup python -u grut.py train -mn bart -mv base -t SRL -bs 32 -uc True -ep 50 -nf 10 -tt SRL -gr half -map lmd > logs/testing_verbose_with_prints_grut.out &`  
     
 
 ### Options
