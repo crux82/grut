@@ -10,6 +10,7 @@ from predictor import Predictor
 from utils.enums import Language
 import argparse
 import logging
+from huricParser import HuricParser
 
 ###############################################################
 # IMPORTANT IMPORTS and OPTIONS
@@ -32,7 +33,7 @@ parser = argparse.ArgumentParser(description='Optional app description')
 parser.add_argument('mode', type=str,
                     help='The modality: train or predict')
 
-def defineTrainArguments(n_fold, use_cuda, epochs, targetType, modelName, modelVariant, batchSize, learning_rate, early_stopping, quick_train, addMap, addLUType, mapType, grounding, entityRetrievalType, lexicalReferences, thresholdW2V, thresholdLDIST):
+def defineTrainArguments(n_fold, use_cuda, epochs, targetType, modelName, modelVariant, batchSize, learning_rate, early_stopping, quick_train, addMap, addLUType, mapType, grounding, lexicalReferences, thresholdW2V, thresholdLDIST):
     global parser
 
     # Optional argument
@@ -92,13 +93,9 @@ def defineTrainArguments(n_fold, use_cuda, epochs, targetType, modelName, modelV
                         help='type of grounding to perform. Acceptable values are "full", "half", "post", "no". Default "' + str(grounding) + '". Define only in train mode.') 
     
     # Optional argument
-    parser.add_argument('-ert','--entityRetrievalType', type=str,
-                        help='type of entity retrieval. Acceptable values are "STR" for string match or "LDIST" for Levenshtein Distance or "W2V" for word2vec. Default "' + str(entityRetrievalType) + '". Define only in train mode.') 
-    
-    # Optional argument
     parser.add_argument('-lexr','--lexicalReferences', type=str,
                         help='type of lexical references of entity usage. Acceptable values are "all" for using all lrs or "random" for using 1 random lr. Default "' + str(lexicalReferences) + '". Define only in train mode.') 
-   
+
     # Optional argument
     parser.add_argument('-tw2v','--thresholdW2V', type=float,
                         help='threshold for W2V retrieval. Acceptable values are floats between 0 and 1. Default "' + str(thresholdW2V) + '". Define only in train mode.') 
@@ -106,22 +103,26 @@ def defineTrainArguments(n_fold, use_cuda, epochs, targetType, modelName, modelV
     # Optional argument
     parser.add_argument('-tLDIST','--thresholdLDIST', type=float,
                         help='threshold for Levenshtein Distance retrieval. Acceptable values are floats between 0 and 1. Default "' + str(thresholdLDIST) + '". Define only in train mode.') 
-    
+       
 
 
-def definePredictArguments(model, text):
+def definePredictArguments(model_dir, text, huric_file_path):
     global parser
 
     # Optional argument
-    parser.add_argument('-m', '--model', type=str,
-                        help='path to model. Default "' + model + '". Define only in predict mode.')
+    parser.add_argument('-m', '--model_dir', type=str,
+                        help='path to model_dir. Default "' + model_dir + '". Define only in predict mode.')
 
     # Optional argument
     parser.add_argument('-i','--input', type=str,
                         help='input text. Default "' + text + '". Define only in predict mode.')
+                        
+    # Optional argument
+    parser.add_argument('-hrc','--huric_file_path', type=str,
+                        help='path to huric file. Default "' + str(huric_file_path) + '". Define only in predict mode.')
 
 
-def defineGlobalArguments(task, num_beams, return_sequences, language):
+def defineGlobalArguments(task, num_beams, return_sequences, language, entityRetrievalType):
     global parser
 
     # Optional argument
@@ -139,6 +140,12 @@ def defineGlobalArguments(task, num_beams, return_sequences, language):
     parser.add_argument('-lan','--language', type=str,
                         help='dataset language to use. Default "' + language.value + '". Define both in train and predict mode.')
 
+    # Optional argument
+    parser.add_argument('-ert','--entityRetrievalType', type=str,
+                        help='type of entity retrieval. Acceptable values are "STR" for string match or "LDIST" for Levenshtein Distance or "W2V" for word2vec. Default "' + str(entityRetrievalType) + '". Define only in train mode.') 
+
+
+
 def main():
 
     # both modes
@@ -146,12 +153,11 @@ def main():
     return_sequences = 1
     task = 'SRL'
     language = Language.ENGLISH
+    entityRetrievalType = "STR"
 
-    defineGlobalArguments(task, num_beams, return_sequences, language)
+    defineGlobalArguments(task, num_beams, return_sequences, language, entityRetrievalType)
 
     # train mode
-    # huricParsingDir = 'data/huric/en'
-    # datasetFile = 'data/data-huric.csv'
     n_fold = 2
     use_cuda = False
     epochs = 1
@@ -166,20 +172,21 @@ def main():
     addLUType = False
     mapType = "nomap"
     grounding = "no"
-    entityRetrievalType = "STR"
     lexicalReferences = "all"
     thresholdW2V = 0.5
     thresholdLDIST = 0.8
     
-    defineTrainArguments(n_fold, use_cuda, epochs, target_type, modelName, modelVariant, batch_size, learning_rate, early_stopping, quick_train, addMap, addLUType, mapType, grounding, entityRetrievalType, lexicalReferences, thresholdW2V, thresholdLDIST)
+    defineTrainArguments(n_fold, use_cuda, epochs, target_type, modelName, modelVariant, batch_size, learning_rate, early_stopping, quick_train, addMap, addLUType, mapType, grounding, lexicalReferences, thresholdW2V, thresholdLDIST)
 
     #predict mode
-    model = 'outputs'
+    model_dir = '/model'
     text = "take the book near the cat on the sofa"
+    # huric_file_path = "/data/huric/en/S4R/2748.hrc"
+    huric_file_path = None
 
-    definePredictArguments(model, text)
+    definePredictArguments(model_dir, text, huric_file_path)
 
-    #get arguments from command line
+    # get arguments from command line
     args = parser.parse_args()
     
     # both modes
@@ -232,10 +239,6 @@ def main():
             entityRetrievalType = args.entityRetrievalType
         if args.lexicalReferences != None:
             lexicalReferences = args.lexicalReferences
-        if args.thresholdW2V != None:
-            thresholdW2V = args.thresholdW2V
-        if args.thresholdLDIST != None:
-            thresholdLDIST = args.thresholdLDIST
 
 
         trainer = Trainer(language, model=modelName, model_variant=modelVariant, task=task, learning_rate=learning_rate, batch_size=batch_size, use_cuda=use_cuda, num_train_epochs=epochs, target_type=target_type, early_stopping=early_stopping, num_beans=num_beams, return_sequences=return_sequences)
@@ -246,12 +249,24 @@ def main():
     # predict only options
     elif args.mode == 'predict':
         print('Starting predict mode...')
-        if args.model != None:
-            model = args.model
+        if args.model_dir != None:
+            model_dir = args.model_dir
         if args.input != None:
             text = args.input
+        if args.huric_file_path != None:
+            huric_file_path = args.huric_file_path
+            if args.entityRetrievalType != None:
+                entityRetrievalType = args.entityRetrievalType
+            addMap = True
+            hp = HuricParser(Language.ENGLISH)
+            [_, sentence, _], _ = hp.parseHuricFile(huric_file_path, task, "", addMap, noMap=False, map_type="lmd", addLUType=False, grounding="yes", entityRetrievalType=entityRetrievalType)
+            text += " # " + sentence.split(" # ")[1]
+            print("File parsed correctly!")
+            print(f"The sentence with the map is: '{text}'")
+        else:
+            print("Huric file path not given, no map added (maybe it's already appended to the input?)")
 
-        predictor = Predictor(model, num_beans=num_beams, return_sequences=return_sequences)
+        predictor = Predictor(model_dir=model_dir, num_beans=num_beams, return_sequences=return_sequences)
         result = predictor.predict(task, text)
         print(result)
 

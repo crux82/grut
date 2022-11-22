@@ -191,14 +191,16 @@ class ErrorAnalyzer:
         
         if(frame_element_t['in_text']):
             self.TOT_ARGUMENT += 1
-            if(frame_element_t['argument'].upper() != frame_element_p['argument'].upper()):
+            if(frame_element_t['argument'][0].upper() != frame_element_p['argument'][0].upper()):
                 self.ARGUMENT_C += 1
                 argument_error = "TEXT"
         elif(not frame_element_t['in_text']):
             self.TOT_ENTITY += 1
-            if(frame_element_t['argument'].upper() != frame_element_p['argument'].upper()):
-                self.ENTITY_C += 1
-                argument_error = "ENTITY"
+
+            for argument_t, argument_p in zip(frame_element_t['argument'], frame_element_p['argument']):
+                if argument_t not in frame_element_p['argument'] or argument_p not in frame_element_t['argument']:
+                    self.ENTITY_C += 1
+                    argument_error = "ENTITY"
         
         return argument_error
         

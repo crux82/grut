@@ -25,7 +25,7 @@ class ConfusionMatrix:
         print("F-MEASURE:\t", self.get_f1())
     
     def save_to_file(self, file):
-        file = open(file, "w") 
+        file = open(file, "w+") 
         lines = [
             "TP: " + str(self.tp), 
             "FP: " + str(self.fp), 

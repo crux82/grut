@@ -43,4 +43,4 @@ def levenshetin_similarity(a,b):
     else:
         longest = len(b)
 
-    return lev_dist(a,b) / longest
+    return 1 - (lev_dist(a,b) / longest)

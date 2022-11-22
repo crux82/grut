@@ -3,7 +3,7 @@ from pathlib import Path
 import spacy.language
 import pandas as pd 
 from evaluator import Evaluator
-from utils.compute_postprocessing_grounding import get_grounded_srl, get_sentence_id, get_truth_entities_from_huric, update_names
+from utils.compute_postprocessing_grounding import get_sentence_id, get_truth_entities_from_huric, update_names
 from utils.enums import SRL_Input, SRL_Output
 
 

@@ -1,15 +1,34 @@
 
+from scipy import spatial
 from itertools import zip_longest
 from transformers import BartTokenizer, BartTokenizerFast
 from transformers.models.t5 import T5Tokenizer
-import spacy
+import spacy.language
 import pandas as pd 
 import os
 from utils.confusion_matrix import ConfusionMatrix
 from utils.enums import Language, SRL_Output
 from utils.levenshetin_distance import levenshetin_similarity
+import numpy
 
 from utils.luDictComputer import LUDictComputer
+
+#############################################################################
+#               INITILIZE WORD EMBEDDINGS BEFORE USING IT                   #
+#############################################################################
+# add if "data/word_embeddings.txt" exists
+word_embeddings = {}
+if os.path.exists("data/word_embeddings.txt"):
+    with open("data/word_embeddings.txt", 'r', encoding="UTF-8") as f:
+        lines = f.readlines()
+        for index, line in enumerate(lines):
+            if index != 0:
+                line_splitted = line.replace("\n", "").split("\t")
+                # WARNING I removed the POS
+                # TODO: in future add it back, after you compute POS tagging on input sentence
+                word = line_splitted[0].split("::")[0]
+                word_embeddings[word] = [float(x) for x in line_splitted[-1].split(",")]
+#############################################################################
 
 def get_frame_lists_from_SRL_prediction(prediction: str, truth: str):
     predicted_frames_output = []
@@ -155,9 +174,7 @@ def calculateMaxColumnLength(model_name, df, column = 'input_text'):
     return max_length + 10, dict(sorted(lengths.items()))
 
 
-def getLUDescriptions(sentence, lan):
-    model = 'en_core_web_sm' if (lan == 'en' or lan == 'english') else 'it_core_news_sm'
-    nlp = spacy.load(model)
+def getLUDescriptions(sentence, lan, nlp: spacy.language.Language):
     doc = nlp(sentence)
 
     file = open('./data/lu_dict', 'r')
@@ -312,15 +329,81 @@ def print_elements_with_no_entities():
     print(dictionary2)
 
 
-def entity_in_sentence(entity, sentence):
+def entity_in_sentence(entity, sentence, nlp: spacy.language.Language = "", type: str = "STR", thresholdW2V = 0.5, thresholdLDIST = 0.8):
     sen_split = sentence.split(" ")
     entity_len = len(entity.split(" "))
     indexes = []
     for index, _ in enumerate(sen_split):
         if index + entity_len <= len(sen_split):
             chunk = " ".join(sen_split[index : index+entity_len])
-            sim = levenshetin_similarity(entity, chunk)
-            
-            if sim <= 0.2:
-                indexes.extend([str(x + 1) for x in range(index, index + entity_len)])
+
+            if type == "STR":
+                sim = 1.0 if entity == chunk else 0.0
+                if sim == 1.0:
+                    indexes.extend([str(x + 1) for x in range(index, index + entity_len)])
+            elif type == "LDIST":
+                sim = levenshetin_similarity(entity, chunk)
+                if sim >= thresholdLDIST:
+                    indexes.extend([str(x + 1) for x in range(index, index + entity_len)])
+            elif type == "W2V":
+                if nlp:
+                    sim = word2vec_similarity(entity, chunk, nlp)
+                    if sim >= thresholdW2V:
+                        indexes.extend([str(x + 1) for x in range(index, index + entity_len)])
+                else:
+                    print("ERROR: nlp (a.k.a. spacy model) is not defined. You need to pass a spacy model for W2V embedding!")
+                    quit()
+
     return indexes
+
+
+def get_word_embedding(sentence: str, nlp: spacy.language.Language):
+    global word_embeddings
+
+    sentence_parsed = nlp(sentence)
+    we = numpy.array([0.0 for _ in range(250)])
+
+    for sent in sentence_parsed.sents:
+        for word in sent:
+            lemma = word.lemma_.lower()
+            # if word_embeddings contains word, take embedding
+            # else generate random 250 numbers between -1.0 and 1.0
+            if lemma in word_embeddings :
+                embedding = numpy.array(word_embeddings[lemma])
+            else:
+                # if lemma is not present in main we dictionary
+                # retrieve newly created we dictionary (or create it if it does not exist)
+                lemma_not_found = False
+                if os.path.exists("./data/word_embeddings_not_found.txt"):
+                    with open("./data/word_embeddings_not_found.txt", "r") as f:
+                        lines = f.readlines()
+                        we_not_found = {}
+                        for line in lines:
+                            line_splitted = line.replace("\n", "").split("\t")
+                            
+                            word = line_splitted[0]
+                            we_not_found[word] = [float(x) for x in line_splitted[-1].split(",")]
+
+                        # search lemma here
+                        # if does not exist here neither, compute random we and add it
+                        if lemma in we_not_found:
+                            embedding = we_not_found[lemma]
+                        else:
+                            lemma_not_found = True
+                else:
+                    lemma_not_found = True
+                if lemma_not_found:
+                    with open("./data/word_embeddings_not_found.txt", "a+") as f:
+                        embedding = numpy.random.uniform(low=-1.0, high=1.0, size=250)
+                        f.write(lemma + "\t" + ", ".join(map(str, embedding)) + "\n")
+            
+            we += embedding
+
+    return we
+
+
+def word2vec_similarity(a: str, b: str, nlp: spacy.language.Language):
+    a_we = get_word_embedding(a, nlp)
+    b_we = get_word_embedding(b, nlp)
+
+    return 1 - spatial.distance.cosine(a_we, b_we)
