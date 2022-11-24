@@ -76,10 +76,11 @@ You should get the same output as before.
 ### Options
 Here you can find a list of the options.
 
-    -h : help.
-    -m : define path to model. (default to "/model/")
-    -t : define the task. (default to "SRL")
-    -i : input to be predicted.
+    -h   : help.
+    -m   : define path to model. (default to "/model/")
+    -t   : define the task. (default to "SRL")
+    -i   : input to be predicted.
+    -hrc : path to huric file to be used as map. (if no path is provided, it is assumed the map description is already appended to the input)
 
 **Notice** that the input needs to be in the form described in the paper, i.e. with existential and spatial map description prepended to the input and divided by `#`.
 
