@@ -58,7 +58,7 @@ def defineTrainArguments(n_fold, use_cuda, epochs, targetType, modelName, modelV
 
     # Optional argument
     parser.add_argument('-mn','--model_name', type=str,
-                        help='model name. Default "' + str(modelName) + '". Define only in train mode.') 
+                        help='model name. Choices: ["bart", "mbart", "t5", "mt5"], Default "' + str(modelName) + '". Define only in train mode.') 
     
     # Optional argument
     parser.add_argument('-mv','--model_variant', type=str,

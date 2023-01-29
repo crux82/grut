@@ -300,7 +300,7 @@ class HuricParser:
 
 
     def computeLexicalGroundingsANDparseMap(self, entities, sentence, map_type, entityRetrievalType, lexicalReferences = "all", thresholdW2V = 0.5, thresholdLDIST = 0.8):
-        print("computeLexicalGroundingsANDparseMap")
+        # print("computeLexicalGroundingsANDparseMap")
         
         entities_list = []
         atoms = {}

@@ -52,7 +52,7 @@ class Trainer:
             self.model_args.gradient_accumulation_steps = 2
             self.model_args.early_stopping_patience = patience
             self.model_args.early_stopping_delta = 1e-4 #0.005
-        elif model == "bart":
+        elif model == "bart" or model == "mbart":
             self.model_args = Seq2SeqArgs()
             self.model_args.fp16 = False
             self.model_args.optimizer = "AdamW" #"Adafactor"
@@ -60,7 +60,10 @@ class Trainer:
             self.model_args.learning_rate = learning_rate
             self.model_args.eval_batch_size = batch_size
             self.model_args.train_batch_size = batch_size
-            self.model_name = 'facebook/bart-' + model_variant
+            if model == "bart":
+                self.model_name = 'facebook/bart-' + model_variant
+            else:
+                self.model_name = 'facebook/mbart-large-cc25'
             self.model_args.gradient_accumulation_steps = 2
             self.model_args.early_stopping_patience = patience
             self.model_args.early_stopping_delta = 1e-4 #0.001
@@ -111,7 +114,7 @@ class Trainer:
         else:
             lutype = ""
 
-        kfold_folder_name = self.model + '_' + self.lan.value + "_" + map_type + "_" + grounding + "grounding_" + entityRetrievalType + "_" + lexicalReferences + "LexicalReferences" + lutype
+        kfold_folder_name = self.lan.value + "/" + self.model + '_' + "_" + map_type + "_" + grounding + "grounding_" + entityRetrievalType + "_" + lexicalReferences + "LexicalReferences" + lutype
         kfold_folder_name += "_" + date_time
         kfold_base_dir = model_folder_name + '/' + kfold_folder_name + '/'
         hp = HuricParser(self.lan)
@@ -125,7 +128,6 @@ class Trainer:
             hp.writeHuricSentences("./data/huric/", "./data/huric_sentences_" + self.lan.value + ".csv")
         
         df = pd.read_csv("./data/huric_sentences_" + self.lan.value + ".csv")
-            
         
         # if quick_train is True, take 100 examples and quick train
         if quick_train:
@@ -258,13 +260,16 @@ class Trainer:
                 eval_df['prefix'] = [self.task] * len(eval_df['input_text'].tolist())
                 train_df['prefix'] = [self.task] * len(train_df['input_text'].tolist())
 
-            elif self.model in ["bart"]:
+            elif self.model in ["bart", "mbart"]:
                 model = Seq2SeqModel(
-                    encoder_decoder_type="bart",
+                    encoder_decoder_type=self.model,
                     encoder_decoder_name=self.model_name,
                     args=self.model_args,
                     use_cuda=cuda_available
                 )
+            
+            print(allData.head())
+            quit()
 
             print("_______________STARTING TO TRAIN_______________")
             model_train_out = model.train_model(train_df, eval_data=eval_df)
