@@ -1,7 +1,7 @@
 # Introduction
 This repository contains the code for two papers:
 - **GrUT v1.0 (Grounded language Understanding via Transformers): Embedding Contextual Information in seq2seq models for Grounded Semantic Role Labeling** published in the **AIxIA 2022** conference by *Claudiu Daniel Hromei* (Tor Vergata, University of Rome; Università Campus Bio-Medico di Roma), *Lorenzo Cristofori* (Tor Vergata, University of Rome), *Danilo Croce* (Tor Vergata, University of Rome) and *Roberto Basili* (Tor Vergata, University of Rome). The paper can be found [here]().  
-- **GrUT v2.0 (Grounded language Understanding via Transformers): Grounding end-to-end Architectures for Semantic Role Labeling in Human Robot Interaction** published in the **NL4AI** workshop at AIxIA 2022 conference by *Claudiu Daniel Hromei* (Tor Vergata, University of Rome; Università Campus Bio-Medico di Roma), *Danilo Croce* (Tor Vergata, University of Rome) and *Roberto Basili* (Tor Vergata, University of Rome). The paper can be found [here]().  
+- **GrUT v2.0 (Grounded language Understanding via Transformers): Grounding end-to-end Architectures for Semantic Role Labeling in Human Robot Interaction** published in the **NL4AI** workshop at AIxIA 2022 conference by *Claudiu Daniel Hromei* (Tor Vergata, University of Rome; Università Campus Bio-Medico di Roma), *Danilo Croce* (Tor Vergata, University of Rome) and *Roberto Basili* (Tor Vergata, University of Rome). The paper can be found [here](https://ceur-ws.org/Vol-3287/paper5.pdf).  
 
 GrUT is a neural approach for the interpretation of robotic spoken commands that is consistent with (i) the world (with all the entities therein), (ii) the robotic platform (with all its inner representations and capabilities), and (iii) the linguistic information derived from the user’s utterance. It is a sequence-to-sequence method that performs Grounded Semantic Role Labeling in an end-to-end manner, thus avoiding the traditional cascade of interpretation tasks to be solved and effectively linking arguments on the basis of the status and properties of the real-world.  
 
@@ -120,3 +120,26 @@ For example: if you want to train **GrUT**, <model_name> will be `bart_en_stm_lm
 - `results_unified.xlsx` containing test set sentences, with predictions and gold standard (truth)  
 - `frames_CM_unified.txt` containing confusion matrix for frames only (Frame Prediction task), merged for all X folds  
 - `frame_elements_CM_unified.txt` containing confusion matrix for frame elements (arguments and types for AIC task), merged for all X folds  
+
+
+# Citation
+To cite the paper, please use the following:  
+```
+@inproceedings{DBLP:conf/aiia/HromeiC022,
+  author    = {Claudiu Daniel Hromei and
+               Danilo Croce and
+               Roberto Basili},
+  title     = {Grounding end-to-end Architectures for Semantic Role Labeling in Human
+               Robot Interaction},
+  booktitle = {Proceedings of the Sixth Workshop on Natural Language for Artificial
+               Intelligence {(NL4AI} 2022) co-located with 21th International Conference
+               of the Italian Association for Artificial Intelligence (AI*IA 2022),
+               Udine, November 30th, 2022},
+  series    = {{CEUR} Workshop Proceedings},
+  volume    = {3287},
+  pages     = {24--38},
+  publisher = {CEUR-WS.org},
+  year      = {2022},
+  url       = {http://ceur-ws.org/Vol-3287/paper5.pdf},
+}
+```
