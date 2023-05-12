@@ -12,7 +12,7 @@ from utils.files_utils import getAllFiles
 from utils.parsing_utils import entity_in_sentence, from_srl_string_to_obj
 
 
-def get_entity_name(entities, arguments, entityRetrievalType, nlp: spacy.language.Language = ""):
+def get_entity_name(entities, arguments, entityRetrievalType, lan: Language, nlp: spacy.language.Language = ""):
     entities_indexes = []
     
     # t8 also known as fridge or refrigerator is an instance of class FRIDGE
@@ -27,7 +27,7 @@ def get_entity_name(entities, arguments, entityRetrievalType, nlp: spacy.languag
                 entity_lrs = split_1[1].split(" is an instance of class ")[0].split(" or ")
                 # print('split(" is an instance of class ")[0].split(" or ")')
                 for entity_lexical_reference in entity_lrs:
-                    indexes = entity_in_sentence(entity_lexical_reference, arguments, nlp, type=entityRetrievalType)
+                    indexes = entity_in_sentence(entity_lexical_reference, arguments, lan, nlp, type=entityRetrievalType)
                     if indexes:
                         e_name = split_1[0]
                         # print('e_name')
@@ -42,7 +42,7 @@ def get_entity_name(entities, arguments, entityRetrievalType, nlp: spacy.languag
     return entities_indexes
 
 
-def get_grounded_srl(srl_object, entities, entityRetrievalType, nlp: spacy.language.Language = "", toPrint: bool = False):
+def get_grounded_srl(srl_object, entities, entityRetrievalType, lan: Language, nlp: spacy.language.Language = "", toPrint: bool = False):
     srl = ""
 
     for frame in srl_object:
@@ -50,7 +50,7 @@ def get_grounded_srl(srl_object, entities, entityRetrievalType, nlp: spacy.langu
         for j, frame_element in enumerate(frame["frameElements"]):
             arguments = frame_element['argument'][0]
 
-            entities_indexes = get_entity_name(entities, arguments, entityRetrievalType, nlp)
+            entities_indexes = get_entity_name(entities, arguments, entityRetrievalType, lan, nlp)
 
             if toPrint:
                 print("entities_indexes")
@@ -96,10 +96,10 @@ def get_grounded_srl(srl_object, entities, entityRetrievalType, nlp: spacy.langu
     return srl
 
 
-def get_sentence_id(text):
+def get_sentence_id(text, lan: Language):
     text = text.rstrip().lstrip()
     text_id = ""
-    df = pd.read_csv("./data/huric_sentences_en.csv")
+    df = pd.read_csv("./data/huric_sentences_" + lan.value + ".csv")
     try:
         text_id = df.loc[df['sentence'] == text]['id'].values[0]
     except IndexError:
@@ -110,17 +110,17 @@ def get_sentence_id(text):
     return text_id
 
 
-def get_truth_entities_from_huric(text):
+def get_truth_entities_from_huric(text, lan: Language):
     entities = []
 
-    text_id = get_sentence_id(text)
+    text_id = get_sentence_id(text, lan)
     if text_id != "":
         # loop through huric files
         files = getAllFiles("./data/huric/en")
         for file in files:
             if str(text_id) in file:
                 hp = HuricParser(Language.ENGLISH)
-                [_, sentence, _], srl = hp.parseHuricFile(file, "SRL", "SRL", True, False, "lmd", False, "full", "W2V", "all")
+                [_, sentence, _], srl = hp.parseHuricFile(file, "SRL", "SRL", True, False, "lmd", False, "full", "W2V", lan, "all")
                 if SRL_Input.FEATURE_SEPARATOR.value in sentence:
                     entities = sentence.split(SRL_Input.FEATURE_SEPARATOR.value)
                     if SRL_Input.FEATURE_ELEMENT_SEPARATOR.value in sentence:
@@ -158,7 +158,7 @@ def update_names(truth_entities, pred_entities):
     return final_entitites
 
 
-def compute_postprocessing_grounding(results_unified_filepath: str = "./model/2022_07_19/bart_halfgrounding", entityRetrievalType: str = "STR", nlp: spacy.language.Language = ""):
+def compute_postprocessing_grounding(lan: Language, results_unified_filepath: str = "./model/2022_07_19/bart_halfgrounding", entityRetrievalType: str = "STR", nlp: spacy.language.Language = ""):
     if "halfgrounding" not in results_unified_filepath and "halfgr" not in results_unified_filepath:
         print("WARNING: filepath does NOT contain 'halfgrounding'. This method is supposed to take results from 'halfgrounding' models!")
     # read results of hg
@@ -205,7 +205,7 @@ def compute_postprocessing_grounding(results_unified_filepath: str = "./model/20
 
         if pred_entities and pred_entities != ["NOMAP"]:
             # if pred_entities => compute here description to put in lists
-            pred_description = get_grounded_srl(pred_obj, pred_entities, entityRetrievalType, nlp, toLog)
+            pred_description = get_grounded_srl(pred_obj, pred_entities, entityRetrievalType, lan, nlp, toLog)
             predictions.append(pred_description)
         else:
             # there are no entities to check
@@ -213,7 +213,7 @@ def compute_postprocessing_grounding(results_unified_filepath: str = "./model/20
             predictions.append(pred)
 
         
-        truth_entities, _ = get_truth_entities_from_huric(text.split(SRL_Input.FEATURE_SEPARATOR.value)[0].lstrip().rstrip())
+        truth_entities, _ = get_truth_entities_from_huric(text.split(SRL_Input.FEATURE_SEPARATOR.value)[0].lstrip().rstrip(), lan)
         
         # if "robot can you find a pack of napkins" in text:
         #     print("truth_entities\n", truth_entities)
@@ -226,7 +226,7 @@ def compute_postprocessing_grounding(results_unified_filepath: str = "./model/20
 
         truth_entities_list.append(truth_entities)
         if truth_entities and truth_entities != ["NOMAP"]:
-            truth_description = get_grounded_srl(truth_obj, truth_entities, "W2V", nlp, toLog)
+            truth_description = get_grounded_srl(truth_obj, truth_entities, "W2V", lan, nlp, toLog)
             truths.append(truth_description)
         else:
             # there are no entities to check

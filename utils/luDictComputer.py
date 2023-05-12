@@ -46,7 +46,8 @@ class LUDictComputer:
 
 
     def precompute(self):
-        if not os.path.exists("./data/lu_dict"):
+        lu_dict_filename = "./data/lu_dict_" + self.lan.value + ".txt"
+        if not os.path.exists(lu_dict_filename):
             print("Computing LU DICT")
             files = getAllFiles("./data/huric/" + self.lan.value)
             lus_dict = {}
@@ -66,10 +67,10 @@ class LUDictComputer:
             for k,v in lus_dict.items():
                 lines.append(k + "\t" + ",".join(v) + "\n")
 
-            file = open("./data/lu_dict", 'w')
+            file = open(lu_dict_filename, 'w')
             file.writelines(lines)
             length = len(lus_dict.keys())
-            print(f"DONE writing ./data/lu_dict with {length} keys")
+            print(f"DONE writing '{lu_dict_filename}' with {length} keys")
         
         
         

@@ -4,7 +4,7 @@ import spacy.language
 import pandas as pd 
 from evaluator import Evaluator
 from utils.compute_postprocessing_grounding import get_sentence_id, get_truth_entities_from_huric, update_names
-from utils.enums import SRL_Input, SRL_Output
+from utils.enums import SRL_Input, SRL_Output, Language
 
 
 
@@ -113,10 +113,10 @@ def get_gsrl(srl_object, entities):
     return srl
 
 
-def compute_truth(input_text, entityRetrievalType, nlp: spacy.language.Language = ""):
+def compute_truth(input_text, entityRetrievalType, lan: Language, nlp: spacy.language.Language = ""):
     sentence = input_text.split(SRL_Input.FEATURE_SEPARATOR.value)[0].lstrip().rstrip()
     print(f"COMPUTING TRUTH \t {sentence}")
-    truth_entities, truth_obj = get_truth_entities_from_huric(sentence)
+    truth_entities, truth_obj = get_truth_entities_from_huric(sentence, lan)
 
     # need to parse truth obj
     truth_obj = restructure_object(truth_obj)
@@ -124,7 +124,7 @@ def compute_truth(input_text, entityRetrievalType, nlp: spacy.language.Language 
     # quit()
     
     # check pred_entities and take entities name from there if exists
-    # it is necessary that the book (b1) has the same name both in truth and pred
+    # it is necessary for the book (b1) to have the same name both in truth and pred
     pred_entities = get_entities_from_text(input_text)
     truth_entities = update_names(truth_entities, pred_entities)
 
@@ -138,7 +138,7 @@ def compute_truth(input_text, entityRetrievalType, nlp: spacy.language.Language 
     return truth
 
 
-def compute_truth_and_evaluate_from_file(path="", grounding_type="full", filename="results_unified_recomputed_from_Huric.xlsx", entityRetrievalType = "STR", nlp: spacy.language.Language = ""):
+def compute_truth_and_evaluate_from_file(lan: Language, path="", grounding_type="full", filename="results_unified_recomputed_from_Huric.xlsx", entityRetrievalType = "STR", nlp: spacy.language.Language = ""):
     df = pd.read_excel(path + "/results_unified.xlsx")
 
     new_df = pd.DataFrame({
@@ -157,7 +157,7 @@ def compute_truth_and_evaluate_from_file(path="", grounding_type="full", filenam
         ids = [get_sentence_id(x.split(SRL_Input.FEATURE_SEPARATOR.value)[0]) for x in new_df['input_text']]
         new_df['id'] = ids
 
-        truths = [compute_truth(input_text, entityRetrievalType=entityRetrievalType, nlp=nlp) for input_text in new_df['input_text']]
+        truths = [compute_truth(input_text, entityRetrievalType=entityRetrievalType, lan=lan, nlp=nlp) for input_text in new_df['input_text']]
         new_df['truth'] = truths
 
     else:

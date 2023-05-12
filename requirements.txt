@@ -8,3 +8,4 @@ spacy==3.3.1
 torch==1.10.2
 transformers==4.16.2
 XlsxWriter==3.0.2
+openpyxl==3.1.1

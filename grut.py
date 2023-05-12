@@ -27,13 +27,13 @@ transformers_logger.setLevel(logging.WARNING)
 ###############################################################
 
 # Instantiate the parser
-parser = argparse.ArgumentParser(description='Optional app description')
+parser = argparse.ArgumentParser(description='GrUT Models')
 
 # Required positional argument
 parser.add_argument('mode', type=str,
                     help='The modality: train or predict')
 
-def defineTrainArguments(n_fold, use_cuda, epochs, targetType, modelName, modelVariant, batchSize, learning_rate, early_stopping, quick_train, addMap, addLUType, mapType, grounding, lexicalReferences, thresholdW2V, thresholdLDIST):
+def defineTrainArguments(n_fold, use_cuda, epochs, targetType, modelName, modelVariant, batchSize, learning_rate, early_stopping, quick_train, addMap, addLUType, mapType, grounding, lexicalReferences, thresholdW2V, thresholdLDIST, additional_training_data_path):
     global parser
 
     # Optional argument
@@ -103,6 +103,10 @@ def defineTrainArguments(n_fold, use_cuda, epochs, targetType, modelName, modelV
     # Optional argument
     parser.add_argument('-tLDIST','--thresholdLDIST', type=float,
                         help='threshold for Levenshtein Distance retrieval. Acceptable values are floats between 0 and 1. Default "' + str(thresholdLDIST) + '". Define only in train mode.') 
+    
+    # Optional argument
+    parser.add_argument('-atdp','--additional_training_data_path', type=str,
+                        help='Path to additional training data. The model will not be evaluated on this data, but it will only use it for training. Default "None". Define only in train mode.') 
        
 
 
@@ -175,8 +179,9 @@ def main():
     lexicalReferences = "all"
     thresholdW2V = 0.5
     thresholdLDIST = 0.8
+    additional_training_data_path = ""
     
-    defineTrainArguments(n_fold, use_cuda, epochs, target_type, modelName, modelVariant, batch_size, learning_rate, early_stopping, quick_train, addMap, addLUType, mapType, grounding, lexicalReferences, thresholdW2V, thresholdLDIST)
+    defineTrainArguments(n_fold, use_cuda, epochs, target_type, modelName, modelVariant, batch_size, learning_rate, early_stopping, quick_train, addMap, addLUType, mapType, grounding, lexicalReferences, thresholdW2V, thresholdLDIST, additional_training_data_path)
 
     #predict mode
     model_dir = '/model'
@@ -239,11 +244,13 @@ def main():
             entityRetrievalType = args.entityRetrievalType
         if args.lexicalReferences != None:
             lexicalReferences = args.lexicalReferences
+        if args.additional_training_data_path != None:
+            additional_training_data_path = args.additional_training_data_path
 
 
         trainer = Trainer(language, model=modelName, model_variant=modelVariant, task=task, learning_rate=learning_rate, batch_size=batch_size, use_cuda=use_cuda, num_train_epochs=epochs, target_type=target_type, early_stopping=early_stopping, num_beans=num_beams, return_sequences=return_sequences)
         print("Training and saving models for all folds!")
-        trainer.train_saving_all_folds_models(n_fold, quick_train=quick_train, addMap=addMap, map_type=mapType, addLUType=addLUType, grounding=grounding, entityRetrievalType=entityRetrievalType, lexicalReferences=lexicalReferences, thresholdW2V=thresholdW2V, thresholdLDIST=thresholdLDIST)
+        trainer.train_saving_all_folds_models(n_fold, quick_train=quick_train, addMap=addMap, map_type=mapType, addLUType=addLUType, grounding=grounding, entityRetrievalType=entityRetrievalType, lexicalReferences=lexicalReferences, thresholdW2V=thresholdW2V, thresholdLDIST=thresholdLDIST, additional_training_data_path=additional_training_data_path)
         print("TRAIN FINISHED")
 
     # predict only options
@@ -259,7 +266,7 @@ def main():
                 entityRetrievalType = args.entityRetrievalType
             addMap = True
             hp = HuricParser(Language.ENGLISH)
-            [_, sentence, _], _ = hp.parseHuricFile(huric_file_path, task, "", addMap, noMap=False, map_type="lmd", addLUType=False, grounding="yes", entityRetrievalType=entityRetrievalType)
+            [_, sentence, _], _ = hp.parseHuricFile(huric_file_path, task, "", addMap, noMap=False, map_type="lmd", addLUType=False, grounding="yes", entityRetrievalType=entityRetrievalType, lan=language)
             text += " # " + sentence.split(" # ")[1]
             print("File parsed correctly!")
             print(f"The sentence with the map is: '{text}'")

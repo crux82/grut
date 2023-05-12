@@ -1,8 +1,7 @@
 
 from scipy import spatial
 from itertools import zip_longest
-from transformers import BartTokenizer, BartTokenizerFast
-from transformers.models.t5 import T5Tokenizer
+from transformers import BartTokenizer, AutoTokenizer
 import spacy.language
 import pandas as pd 
 import os
@@ -17,9 +16,12 @@ from utils.luDictComputer import LUDictComputer
 #               INITILIZE WORD EMBEDDINGS BEFORE USING IT                   #
 #############################################################################
 # add if "data/word_embeddings.txt" exists
-word_embeddings = {}
-if os.path.exists("data/word_embeddings.txt"):
-    with open("data/word_embeddings.txt", 'r', encoding="UTF-8") as f:
+word_embeddings = { 'en': {}, 'it': {}}
+word_embedding_file_en = "data/word_embeddings_en.txt"
+word_embedding_file_it = "data/word_embeddings_it.txt"
+if os.path.exists(word_embedding_file_en) and os.path.exists(word_embedding_file_it):
+    # open and store english word_embedding
+    with open(word_embedding_file_en, 'r', encoding="UTF-8") as f:
         lines = f.readlines()
         for index, line in enumerate(lines):
             if index != 0:
@@ -27,7 +29,20 @@ if os.path.exists("data/word_embeddings.txt"):
                 # WARNING I removed the POS
                 # TODO: in future add it back, after you compute POS tagging on input sentence
                 word = line_splitted[0].split("::")[0]
-                word_embeddings[word] = [float(x) for x in line_splitted[-1].split(",")]
+                word_embeddings['en'][word] = [float(x) for x in line_splitted[-1].split(",")]
+    # open and store italian word_embedding
+    with open(word_embedding_file_it, 'r', encoding="UTF-8") as f:
+        lines = f.readlines()
+        for index, line in enumerate(lines):
+            if index != 0:
+                line_splitted = line.replace("\n", "").split("\t")
+                # WARNING I removed the POS
+                # TODO: in future add it back, after you compute POS tagging on input sentence
+                word = line_splitted[0].split("::")[0]
+                word_embeddings['it'][word] = [float(x) for x in line_splitted[-1].split(",")]
+else:
+    print("WORD EMBEDDINGS NOT FOUND\nEXIT")
+    quit()
 #############################################################################
 
 def get_frame_lists_from_SRL_prediction(prediction: str, truth: str):
@@ -147,11 +162,13 @@ def from_srl_string_to_obj(input: str):
 
 def calculateMaxColumnLength(model_name, df, column = 'input_text'):
     print("Calculating length for column = " + column)
-    tokenizer = ""
-    if "mt5" in model_name:
-        tokenizer = T5Tokenizer.from_pretrained(model_name)
-    elif "bart" in model_name:
-        tokenizer = BartTokenizerFast.from_pretrained(model_name)
+    # tokenizer = ""
+    # if "mt5" in model_name:
+    #     tokenizer = T5Tokenizer.from_pretrained(model_name)
+    # elif "bart" in model_name:
+    #     tokenizer = BartTokenizerFast.from_pretrained(model_name)
+    
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
 
     # debugging lengths
     ids = df["id"].tolist()
@@ -174,10 +191,11 @@ def calculateMaxColumnLength(model_name, df, column = 'input_text'):
     return max_length + 10, dict(sorted(lengths.items()))
 
 
-def getLUDescriptions(sentence, lan, nlp: spacy.language.Language):
+def getLUDescriptions(sentence, lan: Language, nlp: spacy.language.Language):
     doc = nlp(sentence)
 
-    file = open('./data/lu_dict', 'r')
+    lu_dict_filename = "./data/lu_dict_" + lan.value + ".txt"
+    file = open(lu_dict_filename, 'r')
     lines = file.readlines()
     
     lus = {}
@@ -230,16 +248,18 @@ def computeLUDescriptionsIfDontExist(filename, lan: Language):
     if not os.path.exists(filename):
         print("Computing LU DESCRIPTIONS")
         # precompute lus dictionary
-        ludc = LUDictComputer(lan)
-        ludc.precompute()
+        luDC = LUDictComputer(lan)
+        luDC.precompute()
 
         # precompute lus description for every sentence
         sentences = pd.read_csv('./data/huric_sentences_' + lan.value + '.csv')
         precomputeLUDescriptions(filename, sentences['id'].tolist(), sentences['sentence'].tolist())
 
 
-def getMaxLength(strings):
-    tokenizer = BartTokenizer.from_pretrained('facebook/bart-base')
+def getMaxLength(strings, model_name = "bart"):
+    #tokenizer = BartTokenizer.from_pretrained(model_name)
+    
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
     max = 0
     for string in strings:
         inputs = tokenizer(string, return_tensors="pt")
@@ -329,7 +349,7 @@ def print_elements_with_no_entities():
     print(dictionary2)
 
 
-def entity_in_sentence(entity, sentence, nlp: spacy.language.Language = "", type: str = "STR", thresholdW2V = 0.5, thresholdLDIST = 0.8):
+def entity_in_sentence(entity, sentence, lan: Language, nlp: spacy.language.Language = "", type: str = "STR", thresholdW2V = 0.5, thresholdLDIST = 0.8):
     sen_split = sentence.split(" ")
     entity_len = len(entity.split(" "))
     indexes = []
@@ -347,7 +367,7 @@ def entity_in_sentence(entity, sentence, nlp: spacy.language.Language = "", type
                     indexes.extend([str(x + 1) for x in range(index, index + entity_len)])
             elif type == "W2V":
                 if nlp:
-                    sim = word2vec_similarity(entity, chunk, nlp)
+                    sim = word2vec_similarity(entity, chunk, nlp, lan)
                     if sim >= thresholdW2V:
                         indexes.extend([str(x + 1) for x in range(index, index + entity_len)])
                 else:
@@ -357,7 +377,7 @@ def entity_in_sentence(entity, sentence, nlp: spacy.language.Language = "", type
     return indexes
 
 
-def get_word_embedding(sentence: str, nlp: spacy.language.Language):
+def get_word_embedding(sentence: str, nlp: spacy.language.Language, lan: Language):
     global word_embeddings
 
     sentence_parsed = nlp(sentence)
@@ -369,13 +389,14 @@ def get_word_embedding(sentence: str, nlp: spacy.language.Language):
             # if word_embeddings contains word, take embedding
             # else generate random 250 numbers between -1.0 and 1.0
             if lemma in word_embeddings :
-                embedding = numpy.array(word_embeddings[lemma])
+                embedding = numpy.array(word_embeddings[lan.value][lemma])
             else:
                 # if lemma is not present in main we dictionary
                 # retrieve newly created we dictionary (or create it if it does not exist)
                 lemma_not_found = False
-                if os.path.exists("./data/word_embeddings_not_found.txt"):
-                    with open("./data/word_embeddings_not_found.txt", "r") as f:
+                word_embedding_not_found_file = "./data/word_embeddings_not_found_" + lan.value + ".txt"
+                if os.path.exists(word_embedding_not_found_file):
+                    with open(word_embedding_not_found_file, "r") as f:
                         lines = f.readlines()
                         we_not_found = {}
                         for line in lines:
@@ -393,7 +414,8 @@ def get_word_embedding(sentence: str, nlp: spacy.language.Language):
                 else:
                     lemma_not_found = True
                 if lemma_not_found:
-                    with open("./data/word_embeddings_not_found.txt", "a+") as f:
+                    # save it to use it in future runs
+                    with open(word_embedding_not_found_file, "a+") as f:
                         embedding = numpy.random.uniform(low=-1.0, high=1.0, size=250)
                         f.write(lemma + "\t" + ", ".join(map(str, embedding)) + "\n")
             
@@ -402,8 +424,8 @@ def get_word_embedding(sentence: str, nlp: spacy.language.Language):
     return we
 
 
-def word2vec_similarity(a: str, b: str, nlp: spacy.language.Language):
-    a_we = get_word_embedding(a, nlp)
-    b_we = get_word_embedding(b, nlp)
+def word2vec_similarity(a: str, b: str, nlp: spacy.language.Language, lan: Language):
+    a_we = get_word_embedding(a, nlp, lan)
+    b_we = get_word_embedding(b, nlp, lan)
 
     return 1 - spatial.distance.cosine(a_we, b_we)

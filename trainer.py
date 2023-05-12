@@ -19,54 +19,68 @@ from utils.compute_postprocessing_grounding import compute_postprocessing_ground
 from utils.confusion_matrix_merger import readSingleMatricesAndUnifiedMatrix
 from utils.enums import Language, SRL_Output
 from utils.errorAnalyser import ErrorAnalyzer
-from utils.evaluate_from_file import compute_truth_and_evaluate_from_file
 from utils.parsing_utils import computeLUDescriptionsIfDontExist, getMaxLength, isPredictionCorrect
 from utils.results_merger import readResultsAndMerge
 
 import spacy
 
+######################################################
+pd.set_option('display.max_columns', None)
+######################################################
+
 class Trainer:
-    def __init__(self, lan: Language, model = 'bart', model_variant = 'base', task = "SRL", learning_rate = 1e-4, batch_size = 4, output_dir = 'outputs', best_model_dir = 'outputs/best_model', n_gpu = 0, num_train_epochs = 10, warmup_ratio = 0.1, patience = 3, use_cuda = False, target_type = "frame", early_stopping = True, num_beans=None, return_sequences=1):
+    def __init__(self, lan: Language, model = 'bart', model_variant = 'base', task = "SRL", learning_rate = 5e-4, batch_size = 4, output_dir = 'outputs', best_model_dir = 'outputs/best_model', n_gpu = 0, num_train_epochs = 10, warmup_ratio = 0.1, patience = 3, use_cuda = False, target_type = "frame", early_stopping = True, num_beans=None, return_sequences=1):
         self.lan = lan
         self.model = model
         self.model_variant = model_variant
         self.model_name = ""
         self.task = task
 
+        self.spacy_models = {
+            'en': 'en_core_web_sm',
+            'it': 'it_core_news_sm'
+        }
+
         # initialize spacy here
-        self.spacy_model = 'en_core_web_sm' if (self.lan.value == 'en' or self.lan.value == 'english') else 'it_core_news_sm'
+        self.spacy_model = self.spacy_models['en'] if self.lan == Language.ENGLISH else self.spacy_models['it']
         self.nlp = spacy.load(self.spacy_model)
 
-        if model == "mt5" or model == "t5":
+        if model == "mt5" or model == "t5" or model == "it5":
             self.model_args = T5Args()
-            self.model_args.fp16 = False
-            self.model_args.optimizer = "AdamW" #"AdamW" #"Adafactor"
-            self.model_args.scheduler = "linear_schedule_with_warmup" #"linear_schedule_with_warmup" #"constant_schedule" #"constant_schedule_with_warmup" #
-            self.model_args.learning_rate = learning_rate
-            self.model_args.eval_batch_size = batch_size
-            self.model_args.train_batch_size = batch_size
             if model == "t5":
+                # for T5 you can increase batch_size to 8 (or 16?)
+                # then no accumulation is needed (set it to 1)
                 self.model_name = 't5-' + model_variant
+            elif model == "it5":
+                self.model_name = "gsarti/it5-base"
             else:
+                # mT5 is more sensible because is a larger model
+                # you need smaller lr, moreover being large you can't fit it in memory => lower bs, higher accumulation
+                # remember to maintain the ratio to 8
                 self.model_name = 'google/mt5-' + model_variant
-            self.model_args.gradient_accumulation_steps = 2
-            self.model_args.early_stopping_patience = patience
-            self.model_args.early_stopping_delta = 1e-4 #0.005
-        elif model == "bart" or model == "mbart":
+        elif model == "bart" or model == "mbart" or model == "bart-it":
             self.model_args = Seq2SeqArgs()
-            self.model_args.fp16 = False
-            self.model_args.optimizer = "AdamW" #"Adafactor"
-            self.model_args.scheduler = "linear_schedule_with_warmup" #"constant_schedule" #"constant_schedule_with_warmup" #
-            self.model_args.learning_rate = learning_rate
-            self.model_args.eval_batch_size = batch_size
-            self.model_args.train_batch_size = batch_size
+            # for BART 4 steps of accumulation is ideal
+            # you want gradient_accumulation_steps * batch_size = 8
             if model == "bart":
                 self.model_name = 'facebook/bart-' + model_variant
+            elif model == "bart-it":
+                self.model_name = "morenolq/bart-it"
             else:
                 self.model_name = 'facebook/mbart-large-cc25'
-            self.model_args.gradient_accumulation_steps = 2
-            self.model_args.early_stopping_patience = patience
-            self.model_args.early_stopping_delta = 1e-4 #0.001
+            
+
+        # usually you want gradient_accumulation_steps * batch_size = 8
+        self.model_args.gradient_accumulation_steps = 8/batch_size
+        self.model_args.eval_batch_size = batch_size
+        self.model_args.train_batch_size = batch_size
+
+        self.model_args.fp16 = False
+        self.model_args.optimizer = "AdamW" #"Adafactor"
+        self.model_args.scheduler = "linear_schedule_with_warmup" #"constant_schedule" #"constant_schedule_with_warmup" #
+        self.model_args.learning_rate = learning_rate
+        self.model_args.early_stopping_patience = patience
+        self.model_args.early_stopping_delta = 1e-3 #0.001
         # self.model_args.do_sample = True
         self.model_args.evaluate_during_training = True
         self.model_args.evaluate_during_training_steps = 100 #2500
@@ -80,6 +94,7 @@ class Trainer:
         self.model_args.reprocess_input_data = True
         self.model_args.save_eval_checkpoints = False
         self.model_args.save_model_every_epoch = False
+        self.model_args.save_optimizer_and_scheduler = False
         self.model_args.save_steps = -1
         # self.model_args.top_k = 0
         # self.model_args.top_k = 50
@@ -102,7 +117,7 @@ class Trainer:
         print("**********************************")
 
 
-    def train_saving_all_folds_models(self, num_folds, quick_train = False, addMap = False, map_type = "no", addLUType = False, grounding="no", entityRetrievalType = "STR", lexicalReferences = "all", thresholdW2V = 0.5, thresholdLDIST = 0.8):
+    def train_saving_all_folds_models(self, num_folds, quick_train = False, addMap = False, map_type = "no", addLUType = False, grounding="no", entityRetrievalType = "STR", lexicalReferences = "all", thresholdW2V = 0.5, thresholdLDIST = 0.8, additional_training_data_path = ""):
         evaluator = Evaluator(self.target_type)
         now = datetime.now() # current date and time
         date_time = now.strftime("%Y_%m_%d_%H_%M_%S")
@@ -117,6 +132,7 @@ class Trainer:
         kfold_folder_name = self.lan.value + "/" + self.model + '_' + "_" + map_type + "_" + grounding + "grounding_" + entityRetrievalType + "_" + lexicalReferences + "LexicalReferences" + lutype
         kfold_folder_name += "_" + date_time
         kfold_base_dir = model_folder_name + '/' + kfold_folder_name + '/'
+        
         hp = HuricParser(self.lan)
 
         # precompute lus description
@@ -129,9 +145,9 @@ class Trainer:
         
         df = pd.read_csv("./data/huric_sentences_" + self.lan.value + ".csv")
         
-        # if quick_train is True, take 100 examples and quick train
+        # if quick_train is True, take 10% examples and quick train
         if quick_train:
-            df = df.sample(frac=1.0).head(100)
+            df = df.sample(frac=0.1)
 
         # max_sequence_length = calculateMaxColumnLength(self.model_name, datasetFile)
         # print("[max_sequence_length]" + str(max_sequence_length))
@@ -177,15 +193,19 @@ class Trainer:
                     if exc.errno != errno.EEXIST:
                         raise
 
-            filename_to_load = "./data/huric_dataset/" + self.lan.value + "_" + map_type + "_" + grounding + "grounding_" + entityRetrievalType + "_" + lexicalReferences + "LexicalReferences" + lutype + ".csv"
             if not os.path.exists("./data/huric_dataset/"):
                 try:
                     os.makedirs("./data/huric_dataset/")
                 except OSError as exc: # Guard against race condition
                     if exc.errno != errno.EEXIST:
                         raise
-            hp.parseAndWrite("./data/huric/", self.task, filename_to_load, self.target_type, addMap, map_type, addLUType, grounding, entityRetrievalType, lexicalReferences, thresholdW2V, thresholdLDIST)
+            filename_to_load = "./data/huric_dataset/" + self.lan.value + "_" + map_type + "_" + grounding + "grounding_" + entityRetrievalType + "_" + lexicalReferences + "LexicalReferences" + lutype + ".csv"
+            if not os.path.exists(filename_to_load):
+                hp.parseAndWrite("./data/huric/", self.task, filename_to_load, self.lan, self.target_type, addMap, map_type, addLUType, grounding, entityRetrievalType, lexicalReferences, thresholdW2V, thresholdLDIST)
             allData = pd.read_csv(filename_to_load)
+
+            if fold_n == 1:
+                print(allData.head())
 
             # if multitask_model:
             #     for i in allData.index:
@@ -193,9 +213,9 @@ class Trainer:
             #         allData["input_text"][i] = "NOMAP: " + thisInputText if " # NOMAP" in thisInputText else "MAP: " + thisInputText
 
             # compute here max len
-            self.model_args.max_length = getMaxLength(allData['input_text'].tolist())
+            self.model_args.max_length = getMaxLength(allData['input_text'].tolist(), self.model_name)
             self.model_args.max_seq_length = self.model_args.max_length 
-            print(f"MAX LEN IS {self.model_args.max_length }")
+            print(f"MAX LEN IS {self.model_args.max_length}")
 
             # need to take ids for saving predictions later to file
             train_df_ids = train_df['id'].tolist()
@@ -210,6 +230,30 @@ class Trainer:
                 if int(id_string) in train_df_ids:
                     train_input_text.append(input_text)
                     train_target_text.append(target_text)
+
+            # if additional training data is provided, we can use it for training
+            # e.g. english huric dataset translated into italian
+            if additional_training_data_path != "":
+                if os.path.exists(additional_training_data_path):
+                    
+                    additional_training_data = pd.read_excel(additional_training_data_path, engine="openpyxl")
+
+                    if 'input_text' in additional_training_data.columns and 'target_text' in additional_training_data.columns:
+                        train_input_text.extend(additional_training_data['input_text'].tolist())
+                        print(f"ADDED '{len(additional_training_data['input_text'].tolist())}' examples as INPUT")
+
+                        # compute max len on new data and update the param in model args if needed
+                        additional_training_data_maxlen = getMaxLength(additional_training_data['input_text'].tolist(), self.model_name)
+                        if additional_training_data_maxlen > self.model_args.max_length:
+                            self.model_args.max_length = additional_training_data_maxlen
+                            self.model_args.max_seq_length = additional_training_data_maxlen
+
+                        train_target_text.extend(additional_training_data['target_text'].tolist())
+                        print(f"ADDED '{len(additional_training_data['target_text'].tolist())}' examples as TARGET")
+                    else:
+                        print(f"WARNING: {additional_training_data_path} does not have 'input_text' or 'target_text' column!")
+                else:
+                    print(f"WARNING: path '{additional_training_data_path}' does not exist!")
 
             train_df = pd.DataFrame({
                 'input_text': train_input_text, 
@@ -248,7 +292,7 @@ class Trainer:
             test_df.to_csv(test_file_path)
             eval_df.to_csv(eval_file_path)
 
-            if self.model in ["mt5", "t5"] and self.model_variant in ["small", "base", "large", "xl", "xxl"]:
+            if self.model in ["mt5", "t5", "it5"] and self.model_variant in ["small", "base", "large", "xl", "xxl"]:
                 model = T5Model(
                     model_type=self.model,
                     model_name=self.model_name,
@@ -256,20 +300,35 @@ class Trainer:
                     use_cuda=cuda_available
                 )
                 # add prefix to test and train
-                test_df['prefix'] = [self.task] * len(test_df['input_text'].tolist())
-                eval_df['prefix'] = [self.task] * len(eval_df['input_text'].tolist())
-                train_df['prefix'] = [self.task] * len(train_df['input_text'].tolist())
+                prefix = ""
+                if self.lan == Language.ITALIAN:
+                    prefix = "SRL dall'italiano"
+                    if self.model == "it5" and self.model_variant != "small":
+                        # for it5 model you need to lower case all input data
+                        test_df['input_text'] = test_df['input_text'].str.lower()
+                        test_df['target_text'] = test_df['target_text'].str.lower()
 
-            elif self.model in ["bart", "mbart"]:
+                        eval_df['input_text'] = eval_df['input_text'].str.lower()
+                        eval_df['target_text'] = eval_df['target_text'].str.lower()
+                        
+                        train_df['input_text'] = train_df['input_text'].str.lower()
+                        train_df['target_text'] = train_df['target_text'].str.lower()
+                elif self.lan == Language.ENGLISH:
+                    prefix = "SRL from english"
+                else:
+                    print(f"ERROR: language {self.lan} not supported for T5 model.\nLanguages supported are 'ITALIAN' or 'ENGLISH'.")
+                    quit()
+                test_df['prefix'] = [prefix] * len(test_df['input_text'].tolist())
+                eval_df['prefix'] = [prefix] * len(eval_df['input_text'].tolist())
+                train_df['prefix'] = [prefix] * len(train_df['input_text'].tolist())
+
+            elif self.model in ["bart", "mbart", "bart-it"]:
                 model = Seq2SeqModel(
-                    encoder_decoder_type=self.model,
+                    encoder_decoder_type=self.model if self.model != "bart-it" else "bart",
                     encoder_decoder_name=self.model_name,
                     args=self.model_args,
                     use_cuda=cuda_available
                 )
-            
-            print(allData.head())
-            quit()
 
             print("_______________STARTING TO TRAIN_______________")
             model_train_out = model.train_model(train_df, eval_data=eval_df)
@@ -286,8 +345,8 @@ class Trainer:
                 confusion_matrix_frame_elements_span.save_to_file(kfold_dir + '/' + 'frame_elements_span_' + confusion_matrix_name_file)
                 confusion_matrix_frame_elements_head.save_to_file(kfold_dir + '/' + 'frame_elements_head_' + confusion_matrix_name_file)
 
-                if grounding == "full":
-                    compute_truth_and_evaluate_from_file(path=kfold_dir, grounding_type="full", entityRetrievalType=entityRetrievalType, nlp=self.nlp)
+                # if grounding == "full":
+                #     compute_truth_and_evaluate_from_file(path=kfold_dir, grounding_type="full", entityRetrievalType=entityRetrievalType, nlp=self.nlp)
 
                 # print CMs f1
                 print(f"FRAMES F1:\t{confusion_matrix_frame.get_f1()}")
@@ -338,7 +397,7 @@ class Trainer:
 
         if grounding == "post":
             print("INFO: computing post processing grounding!")
-            compute_postprocessing_grounding(destination, entityRetrievalType, self.nlp)
+            compute_postprocessing_grounding(self.lan, destination, entityRetrievalType, self.nlp)
         
         ea = ErrorAnalyzer(destination)
         ea.analyze()

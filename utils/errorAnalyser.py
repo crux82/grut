@@ -61,6 +61,7 @@ class ErrorAnalyzer:
             except:
                 self.NOT_WELL_FORMATTED_C += 1
                 self.NOT_WELL_FORMATTED_IDS.append(id)
+                prediction_obj = []
                 
             self.EXAMPLES += 1
             self.TOT_FRAME += len(truth_obj)

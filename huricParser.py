@@ -39,8 +39,9 @@ class HuricParser:
     # TODO in future: if sentence not in file, compute ludescription and add it to file
     def getLUDescriptions(self, id, sentence: str):
         # first check if sentence has already been pre computed
-        computeLUDescriptionsIfDontExist('./data/sentences_lus_descriptions', self.lan)
-        file = open('./data/sentences_lus_descriptions', 'r')
+        sentences_lus_descriptions = './data/sentences_lus_descriptions_' + self.lan.value + '.txt'
+        computeLUDescriptionsIfDontExist(sentences_lus_descriptions, self.lan)
+        file = open(sentences_lus_descriptions, 'r')
         array = file.readlines()
         for el in array:
             splitted = el.split("\t")
@@ -51,9 +52,10 @@ class HuricParser:
         # else compute it on the fly
         doc = self.nlp(sentence)
 
-        file = open('./data/lu_dict', 'r')
+        # load personalized dictionary of LUs
+        lu_dict_filename = "./data/lu_dict_" + self.lan.value + ".txt"
+        file = open(lu_dict_filename, 'r')
         lines = file.readlines()
-        
         lus = {}
         for line in lines:
             line_splitted = line.split("\t")
@@ -76,6 +78,7 @@ class HuricParser:
             consumed_indexes.append(sentence_splitted.index("pick"))
             consumed_indexes.append(sentence_splitted.index("up"))
 
+        # finally add here the LUs tot the sentence
         for sent in doc.sents:
             for i, word in enumerate(sent):
                 lemma = word.lemma_
@@ -88,7 +91,7 @@ class HuricParser:
         # print(f"Sentence {sentence} \t lus {sentence_lus}")
         return sentence_lus
 
-    def parseHuricFile(self, huricFile, task, type: str, addMap: bool, noMap: bool, map_type: str, addLUType: bool, grounding: str, entityRetrievalType: str, lexicalReferences: str = "all", thresholdW2V = 0.5, thresholdLDIST = 0.8):
+    def parseHuricFile(self, huricFile, task, type: str, addMap: bool, noMap: bool, map_type: str, addLUType: bool, grounding: str, entityRetrievalType: str, lan: Language, lexicalReferences: str = "all", thresholdW2V = 0.5, thresholdLDIST = 0.8):
         # parse an xml file by name
         file = minidom.parse(huricFile)
 
@@ -113,7 +116,7 @@ class HuricParser:
         #     sentence_map, atoms = self.parseMap(entities, lexicalGroundings, lexicalizedMap)
         # else:
         #     sentence_map, atoms = self.computeLexicalGroundingsANDparseMap(entities, sentence, lexicalizedMap)
-        sentence_map, atoms = self.computeLexicalGroundingsANDparseMap(entities, sentence, map_type, entityRetrievalType, lexicalReferences, thresholdW2V, thresholdLDIST)
+        sentence_map, atoms = self.computeLexicalGroundingsANDparseMap(entities, sentence, map_type, entityRetrievalType, lan, lexicalReferences, thresholdW2V, thresholdLDIST)
         
         output = ""
         output_obj = {}
@@ -299,7 +302,7 @@ class HuricParser:
         return map, atoms
 
 
-    def computeLexicalGroundingsANDparseMap(self, entities, sentence, map_type, entityRetrievalType, lexicalReferences = "all", thresholdW2V = 0.5, thresholdLDIST = 0.8):
+    def computeLexicalGroundingsANDparseMap(self, entities, sentence, map_type, entityRetrievalType, lan: Language, lexicalReferences = "all", thresholdW2V = 0.5, thresholdLDIST = 0.8):
         # print("computeLexicalGroundingsANDparseMap")
         
         entities_list = []
@@ -342,12 +345,12 @@ class HuricParser:
             token_ids = []
             if lexicalReferences == "all":
                 for lex_ref in lexical_references:
-                    entity_in_sentence_tokens = entity_in_sentence(lex_ref, sentence, self.nlp, type=entityRetrievalType, thresholdW2V=thresholdW2V, thresholdLDIST=thresholdLDIST)
+                    entity_in_sentence_tokens = entity_in_sentence(lex_ref, sentence, lan, self.nlp, type=entityRetrievalType, thresholdW2V=thresholdW2V, thresholdLDIST=thresholdLDIST)
                     if entity_in_sentence_tokens:
                         token_ids.extend(entity_in_sentence_tokens)
             elif lexicalReferences == "random":
                 index = random.randrange(0, len(lexical_references))
-                entity_in_sentence_tokens = entity_in_sentence(lexical_references[index], sentence, self.nlp, type=entityRetrievalType, thresholdW2V=thresholdW2V, thresholdLDIST=thresholdLDIST)
+                entity_in_sentence_tokens = entity_in_sentence(lexical_references[index], sentence, lan, self.nlp, type=entityRetrievalType, thresholdW2V=thresholdW2V, thresholdLDIST=thresholdLDIST)
                 if entity_in_sentence_tokens:
                     token_ids.extend(entity_in_sentence_tokens)
                 lexical_references = [lexical_references[index]]
@@ -665,7 +668,7 @@ class HuricParser:
         
         return dict
 
-    def parse(self, path, task, type: str, addMap: bool, map_type: str, noMapExamples: bool = False, addLUType: bool = False, grounding:str = "no", entityRetrievalType: str = "STR", lexicalReferences: str = "all", thresholdW2V = 0.5, thresholdLDIST = 0.8):
+    def parse(self, path, task, type: str, addMap: bool, map_type: str, lan: Language, noMapExamples: bool = False, addLUType: bool = False, grounding:str = "no", entityRetrievalType: str = "STR", lexicalReferences: str = "all", thresholdW2V = 0.5, thresholdLDIST = 0.8):
 
         files = getAllFiles(path + self.lan.value)
 
@@ -673,7 +676,7 @@ class HuricParser:
         outputs_obj = {}
 
         for file in files:
-            huric_file_parsed, output_obj = self.parseHuricFile(file, task, type, addMap, noMap=False, map_type=map_type, addLUType=addLUType, grounding=grounding, entityRetrievalType=entityRetrievalType, lexicalReferences=lexicalReferences, thresholdW2V=thresholdW2V, thresholdLDIST=thresholdLDIST)
+            huric_file_parsed, output_obj = self.parseHuricFile(file, task, type, addMap, noMap=False, map_type=map_type, addLUType=addLUType, grounding=grounding, entityRetrievalType=entityRetrievalType, lan=lan, lexicalReferences=lexicalReferences, thresholdW2V=thresholdW2V, thresholdLDIST=thresholdLDIST)
             if output_obj:
                 outputs_obj.update(output_obj)
             files_parsed.append(huric_file_parsed)
@@ -681,7 +684,7 @@ class HuricParser:
             if noMapExamples:
                 # if sentence does not contain NOMAP, we can generate a NOMAP example to expand training set
                 if (" # NOMAP" not in huric_file_parsed[1]) and addMap:
-                    huric_file_parsed_nomap, output_obj_nomap = self.parseHuricFile(file, task, type, addMap=False, noMap=True, map_type="nomap", addLUType=False, grounding="no")
+                    huric_file_parsed_nomap, output_obj_nomap = self.parseHuricFile(file, task, type, addMap=False, noMap=True, map_type="nomap", addLUType=False, grounding="no", lan=lan)
                     if output_obj:
                         outputs_obj.update(output_obj_nomap)
                     files_parsed.append(huric_file_parsed_nomap)
@@ -690,11 +693,11 @@ class HuricParser:
         
         return files_parsed, outputs_obj
     
-    def parseAndWrite(self, path, task, toFile, type: str = "frame", addMap: bool = False, map_type: str = "nomap", addLUType: bool = False, grounding: str = "no", entityRetrievalType = "STR", lexicalReferences: str = "all", thresholdW2V = 0.5, thresholdLDIST = 0.8):
+    def parseAndWrite(self, path, task, toFile, lan: Language, type: str = "frame", addMap: bool = False, map_type: str = "nomap", addLUType: bool = False, grounding: str = "no", entityRetrievalType = "STR", lexicalReferences: str = "all", thresholdW2V = 0.5, thresholdLDIST = 0.8):
         
         header = ['id', 'input_text', 'target_text']
 
-        files_parsed, outputs_obj = self.parse(path, task, type, addMap, map_type, addLUType=addLUType, grounding=grounding, entityRetrievalType = entityRetrievalType, lexicalReferences=lexicalReferences, thresholdW2V=thresholdW2V, thresholdLDIST=thresholdLDIST)
+        files_parsed, outputs_obj = self.parse(path, task, type, addMap, map_type, lan=lan, addLUType=addLUType, grounding=grounding, entityRetrievalType = entityRetrievalType, lexicalReferences=lexicalReferences, thresholdW2V=thresholdW2V, thresholdLDIST=thresholdLDIST)
 
         print(f"Writing HURIC DATASET to {toFile}")
         with open(toFile, 'w', encoding='UTF8', newline='') as f:
