@@ -123,7 +123,7 @@ For example: if you want to train **GrUT**, <model_name> will be `bart_en_stm_lm
 
 
 # Citation
-To cite the paper, please use the following:  
+To cite the paper, please use the followings:  
 ```
 @inproceedings{DBLP:conf/aiia/HromeiC022,
   author    = {Claudiu Daniel Hromei and
@@ -140,6 +140,25 @@ To cite the paper, please use the following:
   pages     = {24--38},
   publisher = {CEUR-WS.org},
   year      = {2022},
-  url       = {http://ceur-ws.org/Vol-3287/paper5.pdf},
+  url       = {http://ceur-ws.org/Vol-3287/paper5.pdf}
+}
+```
+```
+@inproceedings{DBLP:conf/aiia/HromeiCCB22,
+  author       = {Claudiu Daniel Hromei and
+                  Lorenzo Cristofori and
+                  Danilo Croce and
+                  Roberto Basili},
+  title        = {Embedding Contextual Information in Seq2seq Models for Grounded Semantic
+                  Role Labeling},
+  booktitle    = {AIxIA 2022 - Advances in Artificial Intelligence - XXIst International
+                  Conference of the Italian Association for Artificial Intelligence,
+                  AIxIA 2022, Udine, Italy, November 28 - December 2, 2022, Proceedings},
+  series       = {Lecture Notes in Computer Science},
+  volume       = {13796},
+  pages        = {472--485},
+  publisher    = {Springer},
+  year         = {2022},
+  url          = {https://doi.org/10.1007/978-3-031-27181-6\_33}
 }
 ```
