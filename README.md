@@ -1,6 +1,6 @@
 # Introduction
 This repository contains the code for two papers:
-- **GrUT v1.0 (Grounded language Understanding via Transformers): Embedding Contextual Information in seq2seq models for Grounded Semantic Role Labeling** published in the **AIxIA 2022** conference by *Claudiu Daniel Hromei* (Tor Vergata, University of Rome; Università Campus Bio-Medico di Roma), *Lorenzo Cristofori* (Tor Vergata, University of Rome), *Danilo Croce* (Tor Vergata, University of Rome) and *Roberto Basili* (Tor Vergata, University of Rome). The paper can be found [here]().  
+- **GrUT v1.0 (Grounded language Understanding via Transformers): Embedding Contextual Information in seq2seq models for Grounded Semantic Role Labeling** published in the **AIxIA 2022** conference by *Claudiu Daniel Hromei* (Tor Vergata, University of Rome; Università Campus Bio-Medico di Roma), *Lorenzo Cristofori* (Tor Vergata, University of Rome), *Danilo Croce* (Tor Vergata, University of Rome) and *Roberto Basili* (Tor Vergata, University of Rome). The paper can be found [here](https://link.springer.com/chapter/10.1007/978-3-031-27181-6_33).  
 - **GrUT v2.0 (Grounded language Understanding via Transformers): Grounding end-to-end Architectures for Semantic Role Labeling in Human Robot Interaction** published in the **NL4AI** workshop at AIxIA 2022 conference by *Claudiu Daniel Hromei* (Tor Vergata, University of Rome; Università Campus Bio-Medico di Roma), *Danilo Croce* (Tor Vergata, University of Rome) and *Roberto Basili* (Tor Vergata, University of Rome). The paper can be found [here](https://ceur-ws.org/Vol-3287/paper5.pdf).  
 
 GrUT is a neural approach for the interpretation of robotic spoken commands that is consistent with (i) the world (with all the entities therein), (ii) the robotic platform (with all its inner representations and capabilities), and (iii) the linguistic information derived from the user’s utterance. It is a sequence-to-sequence method that performs Grounded Semantic Role Labeling in an end-to-end manner, thus avoiding the traditional cascade of interpretation tasks to be solved and effectively linking arguments on the basis of the status and properties of the real-world.  
@@ -123,7 +123,7 @@ For example: if you want to train **GrUT**, <model_name> will be `bart_en_stm_lm
 
 
 # Citation
-To cite the paper, please use the following:  
+To cite the paper, please use the followings:  
 ```
 @inproceedings{DBLP:conf/aiia/HromeiC022,
   author    = {Claudiu Daniel Hromei and
@@ -140,6 +140,25 @@ To cite the paper, please use the following:
   pages     = {24--38},
   publisher = {CEUR-WS.org},
   year      = {2022},
-  url       = {http://ceur-ws.org/Vol-3287/paper5.pdf},
+  url       = {http://ceur-ws.org/Vol-3287/paper5.pdf}
+}
+```
+```
+@inproceedings{DBLP:conf/aiia/HromeiCCB22,
+  author       = {Claudiu Daniel Hromei and
+                  Lorenzo Cristofori and
+                  Danilo Croce and
+                  Roberto Basili},
+  title        = {Embedding Contextual Information in Seq2seq Models for Grounded Semantic
+                  Role Labeling},
+  booktitle    = {AIxIA 2022 - Advances in Artificial Intelligence - XXIst International
+                  Conference of the Italian Association for Artificial Intelligence,
+                  AIxIA 2022, Udine, Italy, November 28 - December 2, 2022, Proceedings},
+  series       = {Lecture Notes in Computer Science},
+  volume       = {13796},
+  pages        = {472--485},
+  publisher    = {Springer},
+  year         = {2022},
+  url          = {https://doi.org/10.1007/978-3-031-27181-6_33}
 }
 ```
